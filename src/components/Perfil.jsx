@@ -9,6 +9,7 @@ export default function Perfil({ session, onProfileSaved }) {
   const [uploadingImage, setUploadingImage] = useState(false)
   const [mensaje, setMensaje] = useState('')
   const [errorMsg, setErrorMsg] = useState('')
+  const [showAvatarMenu, setShowAvatarMenu] = useState(false) // Controla el menú desplegable de la foto
 
   const [formData, setFormData] = useState({
     full_name: '',
@@ -52,11 +53,12 @@ export default function Perfil({ session, onProfileSaved }) {
     setFormData({ ...formData, [e.target.name]: e.target.value })
   }
 
-  // --- Subir foto de perfil ---
+  // --- Subir o cambiar foto de perfil ---
   const handleAvatarUpload = async (e) => {
     try {
       setUploadingImage(true)
       setErrorMsg('')
+      setShowAvatarMenu(false)
 
       if (!e.target.files || e.target.files.length === 0) return
 
@@ -64,21 +66,18 @@ export default function Perfil({ session, onProfileSaved }) {
       const fileExt = file.name.split('.').pop()
       const filePath = `${session.user.id}/avatar.${fileExt}`
 
-      // 1. Subir al bucket 'avatars' en Supabase Storage
       const { error: uploadError } = await supabase.storage
         .from('avatars')
         .upload(filePath, file, { upsert: true })
 
       if (uploadError) throw uploadError
 
-      // 2. Obtener URL pública
       const { data: urlData } = supabase.storage
         .from('avatars')
         .getPublicUrl(filePath)
 
       const publicUrl = `${urlData.publicUrl}?t=${Date.now()}`
 
-      // 3. Actualizar SOLO avatar_url en la tabla profiles
       const { error: updateError } = await supabase
         .from('profiles')
         .update({ avatar_url: publicUrl })
@@ -97,14 +96,38 @@ export default function Perfil({ session, onProfileSaved }) {
     }
   }
 
-  // --- Guardar cambios del formulario de datos personales ---
+  // --- Eliminar foto de perfil ---
+  const handleRemoveAvatar = async () => {
+    try {
+      setUploadingImage(true)
+      setErrorMsg('')
+      setShowAvatarMenu(false)
+
+      // 1. Actualizar la base de datos poniendo avatar_url en null
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({ avatar_url: null })
+        .eq('id', session.user.id)
+
+      if (updateError) throw updateError
+
+      setFormData((prev) => ({ ...prev, avatar_url: '' }))
+      setMensaje('Foto de perfil eliminada.')
+      onProfileSaved?.()
+      setTimeout(() => setMensaje(''), 2500)
+    } catch (error) {
+      setErrorMsg('Error al eliminar la imagen: ' + error.message)
+    } finally {
+      setUploadingImage(false)
+    }
+  }
+
   const handleSave = async (e) => {
     e.preventDefault()
     setSaving(true)
     setMensaje('')
     setErrorMsg('')
 
-    // Armamos el payload enviando solo las columnas de datos personales
     const updates = {
       id: session.user.id,
       full_name: formData.full_name.trim() || null,
@@ -113,7 +136,6 @@ export default function Perfil({ session, onProfileSaved }) {
       clinic_name: formData.clinic_name.trim() || null,
     }
 
-    // Solo enviamos avatar_url si tiene un valor real para evitar errores si la columna aún no está creada
     if (formData.avatar_url) {
       updates.avatar_url = formData.avatar_url
     }
@@ -180,13 +202,13 @@ export default function Perfil({ session, onProfileSaved }) {
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        {/* Foto de perfil / Iniciales */}
+        {/* Tarjeta de foto con menú desplegable */}
         <div className="rounded-xl border border-slate-200 bg-white p-6 text-center shadow-xs lg:col-span-1">
-          <div className="relative mx-auto h-24 w-24">
-            <label
-              htmlFor="avatar-upload-input"
-              className="group relative block h-24 w-24 cursor-pointer overflow-hidden rounded-full border-2 border-sky-600 shadow-sm transition-transform hover:scale-105"
-              title="Haz clic para cambiar tu foto"
+          <div className="relative mx-auto inline-block">
+            <div
+              onClick={() => setShowAvatarMenu((prev) => !prev)}
+              className="group relative h-24 w-24 cursor-pointer overflow-hidden rounded-full border-2 border-sky-600 shadow-sm transition-transform hover:scale-102"
+              title="Haz clic para gestionar tu foto"
             >
               {formData.avatar_url ? (
                 <img
@@ -201,27 +223,46 @@ export default function Perfil({ session, onProfileSaved }) {
               )}
 
               <div className="absolute inset-0 flex items-center justify-center bg-black/40 text-white opacity-0 transition-opacity group-hover:opacity-100">
-                <span className="text-xs font-semibold">Cambiar foto</span>
+                <span className="text-xs font-semibold">Editar foto</span>
               </div>
-            </label>
+            </div>
 
-            <input
-              id="avatar-upload-input"
-              type="file"
-              accept="image/*"
-              onChange={handleAvatarUpload}
-              disabled={uploadingImage}
-              className="hidden"
-            />
+            {/* Menú desplegable al hacer clic */}
+            {showAvatarMenu && (
+              <div className="absolute left-1/2 mt-2 w-48 -translate-x-1/2 rounded-xl border border-slate-200 bg-white py-1 shadow-xl z-50 animate-fade-in">
+                <label className="flex w-full cursor-pointer items-center px-4 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50">
+                  📷 Cambiar foto
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleAvatarUpload}
+                    disabled={uploadingImage}
+                    className="hidden"
+                  />
+                </label>
+
+                {formData.avatar_url && (
+                  <button
+                    type="button"
+                    onClick={handleRemoveAvatar}
+                    disabled={uploadingImage}
+                    className="flex w-full items-center px-4 py-2 text-xs font-medium text-red-600 hover:bg-red-50 cursor-pointer"
+                  >
+                    🗑️ Eliminar foto
+                  </button>
+                )}
+              </div>
+            )}
           </div>
 
-          {uploadingImage && <p className="mt-2 text-xs text-sky-600 font-medium">Subiendo foto...</p>}
+          {uploadingImage && <p className="mt-2 text-xs text-sky-600 font-medium">Procesando imagen...</p>}
+          {errorMsg && <p className="mt-2 text-xs text-red-600 font-medium">{errorMsg}</p>}
 
           <p className="mt-3 truncate text-sm font-medium text-slate-800">{formData.full_name || 'Sin nombre configurado'}</p>
           <p className="truncate text-xs text-slate-500">{session.user.email}</p>
         </div>
 
-        {/* Formulario de Perfil (Guarda solo los datos ingresados) */}
+        {/* Formulario de perfil */}
         <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-xs sm:p-6 lg:col-span-2">
           <form onSubmit={handleSave} className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
@@ -278,13 +319,12 @@ export default function Perfil({ session, onProfileSaved }) {
                 {saving ? 'Guardando...' : 'Guardar cambios'}
               </button>
               {mensaje && <p className="animate-fade-in text-xs font-medium text-emerald-600">{mensaje}</p>}
-              {errorMsg && <p className="animate-fade-in text-xs font-medium text-red-600">{errorMsg}</p>}
             </div>
           </form>
         </div>
       </div>
 
-      {/* Cambio de contraseña */}
+      {/* Sección de contraseña */}
       <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-xs sm:p-6">
         <h4 className="mb-1 text-base font-medium text-slate-800">Seguridad</h4>
         <p className="mb-4 text-xs text-slate-500">Cambia la contraseña con la que inicias sesión.</p>
