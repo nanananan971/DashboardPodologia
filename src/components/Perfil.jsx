@@ -9,7 +9,7 @@ export default function Perfil({ session, onProfileSaved }) {
   const [uploadingImage, setUploadingImage] = useState(false)
   const [mensaje, setMensaje] = useState('')
   const [errorMsg, setErrorMsg] = useState('')
-  const [showImageModal, setShowImageModal] = useState(false) // Controla el modal de vista ampliada
+  const [showImageModal, setShowImageModal] = useState(false)
 
   const [formData, setFormData] = useState({
     full_name: '',
@@ -86,7 +86,7 @@ export default function Perfil({ session, onProfileSaved }) {
 
       setFormData((prev) => ({ ...prev, avatar_url: publicUrl }))
       setMensaje('Foto de perfil actualizada.')
-      setShowImageModal(false) // Cerramos el modal tras subir
+      setShowImageModal(false)
       onProfileSaved?.()
       setTimeout(() => setMensaje(''), 2500)
     } catch (error) {
@@ -111,7 +111,7 @@ export default function Perfil({ session, onProfileSaved }) {
 
       setFormData((prev) => ({ ...prev, avatar_url: '' }))
       setMensaje('Foto de perfil eliminada.')
-      setShowImageModal(false) // Cerramos el modal tras eliminar
+      setShowImageModal(false)
       onProfileSaved?.()
       setTimeout(() => setMensaje(''), 2500)
     } catch (error) {
@@ -208,14 +208,14 @@ export default function Perfil({ session, onProfileSaved }) {
           <div className="relative mx-auto inline-block">
             <div
               onClick={() => setShowImageModal(true)}
-              className="group relative h-28 w-28 cursor-pointer overflow-hidden rounded-full border-2 border-sky-600 shadow-sm transition-transform hover:scale-105"
+              className="group relative h-28 w-28 cursor-pointer overflow-hidden rounded-full border-2 border-sky-600 shadow-sm transition-transform hover:scale-105 flex items-center justify-center bg-slate-50"
               title="Haz clic para ver la imagen en grande"
             >
               {formData.avatar_url ? (
                 <img
                   src={formData.avatar_url}
                   alt="Foto de Perfil"
-                  className="h-full w-full object-cover"
+                  className="h-full w-full object-contain p-0.5"
                 />
               ) : (
                 <div className="flex h-full w-full items-center justify-center bg-sky-100 text-3xl font-bold text-sky-700">
@@ -347,7 +347,7 @@ export default function Perfil({ session, onProfileSaved }) {
         >
           <div
             className="relative w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl text-center"
-            onClick={(e) => e.stopPropagation()} // Evita cerrar el modal al hacer clic dentro
+            onClick={(e) => e.stopPropagation()}
           >
             {/* Botón X de cerrar */}
             <button
@@ -359,20 +359,19 @@ export default function Perfil({ session, onProfileSaved }) {
 
             <h4 className="mb-4 text-base font-semibold text-slate-800">Foto de perfil</h4>
 
-            {/* Vista previa ampliada */}
-            <div className="mx-auto mb-6 h-48 w-48 overflow-hidden rounded-full border-4 border-sky-100 shadow-md flex items-center justify-center bg-slate-100">
+            {/* Vista previa ampliada y adaptativa sin recortes */}
+            <div className="mx-auto mb-6 flex h-48 w-full items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-slate-50 p-2 shadow-inner">
               {formData.avatar_url ? (
                 <img
                   src={formData.avatar_url}
                   alt="Vista ampliada"
-                  className="h-full w-full object-cover"
+                  className="max-h-full max-w-full object-contain"
                 />
               ) : (
                 <span className="text-5xl font-bold text-sky-700">{iniciales}</span>
               )}
             </div>
 
-            {/* Estado de carga / errores dentro del modal */}
             {uploadingImage && <p className="mb-3 text-xs text-sky-600 font-medium animate-pulse">Procesando imagen...</p>}
             {errorMsg && <p className="mb-3 text-xs text-red-600 font-medium">{errorMsg}</p>}
 
