@@ -1,10 +1,4 @@
 // src/components/Perfil.jsx
-//
-// Conectada a la tabla `profiles` (ver supabase/schema_setup.sql) para
-// que puedas editar tus datos profesionales reales, y también permite
-// cambiar la contraseña de acceso usando el sistema de autenticación de
-// Supabase. Al guardar, avisa a App.jsx (onProfileSaved) para refrescar
-// el nombre que se muestra en el header y en el panel de Profesionales.
 
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabase'
@@ -12,6 +6,7 @@ import { supabase } from '../supabase'
 export default function Perfil({ session, onProfileSaved }) {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [uploadingImage, setUploadingImage] = useState(false)
   const [mensaje, setMensaje] = useState('')
   const [errorMsg, setErrorMsg] = useState('')
 
@@ -20,6 +15,7 @@ export default function Perfil({ session, onProfileSaved }) {
     specialty: '',
     phone: '',
     clinic_name: '',
+    avatar_url: '',
   })
 
   const [passwords, setPasswords] = useState({ nueva: '', confirmar: '' })
@@ -34,7 +30,7 @@ export default function Perfil({ session, onProfileSaved }) {
     setLoading(true)
     const { data, error } = await supabase
       .from('profiles')
-      .select('full_name, specialty, phone, clinic_name')
+      .select('full_name, specialty, phone, clinic_name, avatar_url')
       .eq('id', session.user.id)
       .maybeSingle()
 
@@ -46,6 +42,7 @@ export default function Perfil({ session, onProfileSaved }) {
         specialty: data.specialty || '',
         phone: data.phone || '',
         clinic_name: data.clinic_name || '',
+        avatar_url: data.avatar_url || '',
       })
     }
     setLoading(false)
@@ -55,16 +52,73 @@ export default function Perfil({ session, onProfileSaved }) {
     setFormData({ ...formData, [e.target.name]: e.target.value })
   }
 
+  // --- Subir foto de perfil ---
+  const handleAvatarUpload = async (e) => {
+    try {
+      setUploadingImage(true)
+      setErrorMsg('')
+
+      if (!e.target.files || e.target.files.length === 0) return
+
+      const file = e.target.files[0]
+      const fileExt = file.name.split('.').pop()
+      const filePath = `${session.user.id}/avatar.${fileExt}`
+
+      // 1. Subir al bucket 'avatars' en Supabase Storage
+      const { error: uploadError } = await supabase.storage
+        .from('avatars')
+        .upload(filePath, file, { upsert: true })
+
+      if (uploadError) throw uploadError
+
+      // 2. Obtener URL pública
+      const { data: urlData } = supabase.storage
+        .from('avatars')
+        .getPublicUrl(filePath)
+
+      const publicUrl = `${urlData.publicUrl}?t=${Date.now()}`
+
+      // 3. Actualizar SOLO avatar_url en la tabla profiles
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({ avatar_url: publicUrl })
+        .eq('id', session.user.id)
+
+      if (updateError) throw updateError
+
+      setFormData((prev) => ({ ...prev, avatar_url: publicUrl }))
+      setMensaje('Foto de perfil actualizada.')
+      onProfileSaved?.()
+      setTimeout(() => setMensaje(''), 2500)
+    } catch (error) {
+      setErrorMsg('Error al subir la imagen: ' + error.message)
+    } finally {
+      setUploadingImage(false)
+    }
+  }
+
+  // --- Guardar cambios del formulario de datos personales ---
   const handleSave = async (e) => {
     e.preventDefault()
     setSaving(true)
     setMensaje('')
     setErrorMsg('')
 
-    const { error } = await supabase.from('profiles').upsert({
+    // Armamos el payload enviando solo las columnas de datos personales
+    const updates = {
       id: session.user.id,
-      ...formData,
-    })
+      full_name: formData.full_name.trim() || null,
+      specialty: formData.specialty.trim() || null,
+      phone: formData.phone.trim() || null,
+      clinic_name: formData.clinic_name.trim() || null,
+    }
+
+    // Solo enviamos avatar_url si tiene un valor real para evitar errores si la columna aún no está creada
+    if (formData.avatar_url) {
+      updates.avatar_url = formData.avatar_url
+    }
+
+    const { error } = await supabase.from('profiles').upsert(updates)
 
     if (error) {
       setErrorMsg('Error al guardar: ' + error.message)
@@ -126,14 +180,48 @@ export default function Perfil({ session, onProfileSaved }) {
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        {/* Foto de perfil / Iniciales */}
         <div className="rounded-xl border border-slate-200 bg-white p-6 text-center shadow-xs lg:col-span-1">
-          <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-sky-100 text-2xl font-bold text-sky-700">
-            {iniciales}
+          <div className="relative mx-auto h-24 w-24">
+            <label
+              htmlFor="avatar-upload-input"
+              className="group relative block h-24 w-24 cursor-pointer overflow-hidden rounded-full border-2 border-sky-600 shadow-sm transition-transform hover:scale-105"
+              title="Haz clic para cambiar tu foto"
+            >
+              {formData.avatar_url ? (
+                <img
+                  src={formData.avatar_url}
+                  alt="Foto de Perfil"
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center bg-sky-100 text-2xl font-bold text-sky-700">
+                  {iniciales}
+                </div>
+              )}
+
+              <div className="absolute inset-0 flex items-center justify-center bg-black/40 text-white opacity-0 transition-opacity group-hover:opacity-100">
+                <span className="text-xs font-semibold">Cambiar foto</span>
+              </div>
+            </label>
+
+            <input
+              id="avatar-upload-input"
+              type="file"
+              accept="image/*"
+              onChange={handleAvatarUpload}
+              disabled={uploadingImage}
+              className="hidden"
+            />
           </div>
+
+          {uploadingImage && <p className="mt-2 text-xs text-sky-600 font-medium">Subiendo foto...</p>}
+
           <p className="mt-3 truncate text-sm font-medium text-slate-800">{formData.full_name || 'Sin nombre configurado'}</p>
           <p className="truncate text-xs text-slate-500">{session.user.email}</p>
         </div>
 
+        {/* Formulario de Perfil (Guarda solo los datos ingresados) */}
         <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-xs sm:p-6 lg:col-span-2">
           <form onSubmit={handleSave} className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
