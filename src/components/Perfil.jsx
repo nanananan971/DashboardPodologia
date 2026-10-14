@@ -9,7 +9,7 @@ export default function Perfil({ session, onProfileSaved }) {
   const [uploadingImage, setUploadingImage] = useState(false)
   const [mensaje, setMensaje] = useState('')
   const [errorMsg, setErrorMsg] = useState('')
-  const [showAvatarMenu, setShowAvatarMenu] = useState(false) // Controla el menú desplegable de la foto
+  const [showImageModal, setShowImageModal] = useState(false) // Controla el modal de vista ampliada
 
   const [formData, setFormData] = useState({
     full_name: '',
@@ -58,7 +58,6 @@ export default function Perfil({ session, onProfileSaved }) {
     try {
       setUploadingImage(true)
       setErrorMsg('')
-      setShowAvatarMenu(false)
 
       if (!e.target.files || e.target.files.length === 0) return
 
@@ -87,6 +86,7 @@ export default function Perfil({ session, onProfileSaved }) {
 
       setFormData((prev) => ({ ...prev, avatar_url: publicUrl }))
       setMensaje('Foto de perfil actualizada.')
+      setShowImageModal(false) // Cerramos el modal tras subir
       onProfileSaved?.()
       setTimeout(() => setMensaje(''), 2500)
     } catch (error) {
@@ -101,9 +101,7 @@ export default function Perfil({ session, onProfileSaved }) {
     try {
       setUploadingImage(true)
       setErrorMsg('')
-      setShowAvatarMenu(false)
 
-      // 1. Actualizar la base de datos poniendo avatar_url en null
       const { error: updateError } = await supabase
         .from('profiles')
         .update({ avatar_url: null })
@@ -113,6 +111,7 @@ export default function Perfil({ session, onProfileSaved }) {
 
       setFormData((prev) => ({ ...prev, avatar_url: '' }))
       setMensaje('Foto de perfil eliminada.')
+      setShowImageModal(false) // Cerramos el modal tras eliminar
       onProfileSaved?.()
       setTimeout(() => setMensaje(''), 2500)
     } catch (error) {
@@ -198,17 +197,19 @@ export default function Perfil({ session, onProfileSaved }) {
     <div className="animate-fade-in-up space-y-6">
       <div className="border-b border-slate-200 pb-5">
         <h3 className="text-lg font-semibold text-slate-800">Perfil Profesional</h3>
-        <p className="text-sm text-slate-500">Estos datos son los que verán tus pacientes y los que usa la plataforma para identificarte.</p>
+        <p className="text-sm text-slate-500">
+          Estos datos son los que verán tus pacientes y los que usa la plataforma para identificarte.
+        </p>
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        {/* Tarjeta de foto con menú desplegable */}
+        {/* Tarjeta de Avatar */}
         <div className="rounded-xl border border-slate-200 bg-white p-6 text-center shadow-xs lg:col-span-1">
           <div className="relative mx-auto inline-block">
             <div
-              onClick={() => setShowAvatarMenu((prev) => !prev)}
-              className="group relative h-24 w-24 cursor-pointer overflow-hidden rounded-full border-2 border-sky-600 shadow-sm transition-transform hover:scale-102"
-              title="Haz clic para gestionar tu foto"
+              onClick={() => setShowImageModal(true)}
+              className="group relative h-28 w-28 cursor-pointer overflow-hidden rounded-full border-2 border-sky-600 shadow-sm transition-transform hover:scale-105"
+              title="Haz clic para ver la imagen en grande"
             >
               {formData.avatar_url ? (
                 <img
@@ -217,48 +218,20 @@ export default function Perfil({ session, onProfileSaved }) {
                   className="h-full w-full object-cover"
                 />
               ) : (
-                <div className="flex h-full w-full items-center justify-center bg-sky-100 text-2xl font-bold text-sky-700">
+                <div className="flex h-full w-full items-center justify-center bg-sky-100 text-3xl font-bold text-sky-700">
                   {iniciales}
                 </div>
               )}
 
               <div className="absolute inset-0 flex items-center justify-center bg-black/40 text-white opacity-0 transition-opacity group-hover:opacity-100">
-                <span className="text-xs font-semibold">Editar foto</span>
+                <span className="text-xs font-semibold">Ampliar / Editar</span>
               </div>
             </div>
-
-            {/* Menú desplegable al hacer clic */}
-            {showAvatarMenu && (
-              <div className="absolute left-1/2 mt-2 w-48 -translate-x-1/2 rounded-xl border border-slate-200 bg-white py-1 shadow-xl z-50 animate-fade-in">
-                <label className="flex w-full cursor-pointer items-center px-4 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50">
-                  📷 Cambiar foto
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleAvatarUpload}
-                    disabled={uploadingImage}
-                    className="hidden"
-                  />
-                </label>
-
-                {formData.avatar_url && (
-                  <button
-                    type="button"
-                    onClick={handleRemoveAvatar}
-                    disabled={uploadingImage}
-                    className="flex w-full items-center px-4 py-2 text-xs font-medium text-red-600 hover:bg-red-50 cursor-pointer"
-                  >
-                    🗑️ Eliminar foto
-                  </button>
-                )}
-              </div>
-            )}
           </div>
 
-          {uploadingImage && <p className="mt-2 text-xs text-sky-600 font-medium">Procesando imagen...</p>}
-          {errorMsg && <p className="mt-2 text-xs text-red-600 font-medium">{errorMsg}</p>}
-
-          <p className="mt-3 truncate text-sm font-medium text-slate-800">{formData.full_name || 'Sin nombre configurado'}</p>
+          <p className="mt-3 truncate text-sm font-medium text-slate-800">
+            {formData.full_name || 'Sin nombre configurado'}
+          </p>
           <p className="truncate text-xs text-slate-500">{session.user.email}</p>
         </div>
 
@@ -365,6 +338,79 @@ export default function Perfil({ session, onProfileSaved }) {
           </div>
         </form>
       </div>
+
+      {/* --- MODAL EXPANDIDO DE LA IMAGEN DE PERFIL --- */}
+      {showImageModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-xs animate-fade-in"
+          onClick={() => setShowImageModal(false)}
+        >
+          <div
+            className="relative w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl text-center"
+            onClick={(e) => e.stopPropagation()} // Evita cerrar el modal al hacer clic dentro
+          >
+            {/* Botón X de cerrar */}
+            <button
+              onClick={() => setShowImageModal(false)}
+              className="absolute top-3 right-3 text-slate-400 hover:text-slate-600 text-lg font-bold p-1 cursor-pointer"
+            >
+              ✕
+            </button>
+
+            <h4 className="mb-4 text-base font-semibold text-slate-800">Foto de perfil</h4>
+
+            {/* Vista previa ampliada */}
+            <div className="mx-auto mb-6 h-48 w-48 overflow-hidden rounded-full border-4 border-sky-100 shadow-md flex items-center justify-center bg-slate-100">
+              {formData.avatar_url ? (
+                <img
+                  src={formData.avatar_url}
+                  alt="Vista ampliada"
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <span className="text-5xl font-bold text-sky-700">{iniciales}</span>
+              )}
+            </div>
+
+            {/* Estado de carga / errores dentro del modal */}
+            {uploadingImage && <p className="mb-3 text-xs text-sky-600 font-medium animate-pulse">Procesando imagen...</p>}
+            {errorMsg && <p className="mb-3 text-xs text-red-600 font-medium">{errorMsg}</p>}
+
+            {/* Opciones del modal */}
+            <div className="flex flex-col gap-2.5">
+              <label className="flex w-full cursor-pointer items-center justify-center rounded-lg bg-sky-600 py-2.5 text-sm font-medium text-white transition-colors hover:bg-sky-700">
+                📷 {formData.avatar_url ? 'Cambiar foto' : 'Subir foto'}
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleAvatarUpload}
+                  disabled={uploadingImage}
+                  className="hidden"
+                />
+              </label>
+
+              {formData.avatar_url && (
+                <button
+                  type="button"
+                  onClick={handleRemoveAvatar}
+                  disabled={uploadingImage}
+                  className="w-full rounded-lg border border-red-200 bg-red-50 py-2.5 text-sm font-medium text-red-600 transition-colors hover:bg-red-100 cursor-pointer"
+                >
+                  🗑️ Eliminar foto
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={() => setShowImageModal(false)}
+                className="w-full rounded-lg border border-slate-200 bg-white py-2 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-50 cursor-pointer"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
