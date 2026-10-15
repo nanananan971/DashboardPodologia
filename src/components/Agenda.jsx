@@ -25,7 +25,7 @@ const getCurrentLocalDateTimeMin = () => {
   return `${y}-${m}-${d}T${h}:${min}`;
 };
 
-export default function Agenda({ session, professionalId, profile }) {
+export default function Agenda({ session, professionalId, profile: initialProfile }) {
   const [activeTab, setActiveTab] = useState('calendar');
   const [calendarView, setCalendarView] = useState('day'); 
 
@@ -36,7 +36,21 @@ export default function Agenda({ session, professionalId, profile }) {
 
   const [showModal, setShowModal] = useState(false);
   const [modalMode, setModalMode] = useState('create');
-  const [currentAppt, setCurrentAppt] = useState({ id: '', patient_id: '', start_time: '', end_time: '', status: 'confirmed' });
+  
+  const [currentProfile, setCurrentProfile] = useState(initialProfile || null);
+
+  const [currentAppt, setCurrentAppt] = useState({
+    id: '',
+    patient_id: '',
+    start_time: '',
+    end_time: '',
+    status: 'confirmed',
+    modalidad: 'presencial',
+    comuna: '',
+    direccion: '',
+    servicio: '',
+    notas: ''
+  });
 
   const [patients, setPatients] = useState([]);
   const [patientMode, setPatientMode] = useState('existing');
@@ -67,19 +81,43 @@ export default function Agenda({ session, professionalId, profile }) {
       loadAppointments(activeProfessionalId);
       loadAvailability(activeProfessionalId);
       loadPatients(activeProfessionalId);
+      fetchProfessionalProfile(activeProfessionalId);
     }
   }, [activeProfessionalId]);
+
+  const fetchProfessionalProfile = async (userId) => {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('servicios, modalidades, comunas_cobertura, clinic_name, full_name')
+      .eq('id', userId)
+      .maybeSingle();
+
+    if (!error && data) {
+      setCurrentProfile(data);
+    }
+  };
+
+  const serviciosDisponibles = Array.isArray(currentProfile?.servicios) ? currentProfile.servicios : [];
+  const comunasDisponibles = Array.isArray(currentProfile?.comunas_cobertura) ? currentProfile.comunas_cobertura : [];
+  const permitePresencial = currentProfile?.modalidades?.presencial ?? true;
+  const permiteDomicilio = currentProfile?.modalidades?.domicilio ?? false;
 
   const openAppointmentDetail = (appointment) => setSelectedAppointment(appointment);
 
   const handleEditFromDetail = (appointment) => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
+    
     setCurrentAppt({
       id: appointment.id,
       patient_id: appointment.patient_id,
       start_time: formatLocalDateTimeStr(new Date(appointment.start_time)),
       end_time: appointment.end_time,
-      status: appointment.status
+      status: appointment.status,
+      modalidad: appointment.modalidad || (permitePresencial ? 'presencial' : 'domicilio'),
+      comuna: appointment.comuna || '',
+      direccion: appointment.direccion || '',
+      servicio: appointment.servicio || '',
+      notas: appointment.notas || ''
     });
     setPatientMode('existing');
     setModalMode('edit');
@@ -273,6 +311,20 @@ export default function Agenda({ session, professionalId, profile }) {
       alert('Selecciona fecha y hora.');
       return;
     }
+    if (!currentAppt.servicio) {
+      alert('Selecciona un servicio.');
+      return;
+    }
+    if (currentAppt.modalidad === 'domicilio') {
+      if (!currentAppt.comuna) {
+        alert('Selecciona una comuna de cobertura para la atención a domicilio.');
+        return;
+      }
+      if (!currentAppt.direccion.trim()) {
+        alert('Ingresa la dirección exacta para la atención a domicilio.');
+        return;
+      }
+    }
 
     setSavingAppt(true);
     try {
@@ -310,7 +362,12 @@ export default function Agenda({ session, professionalId, profile }) {
         patient_id: patientId,
         start_time: startTime,
         end_time: endTime,
-        status: currentAppt.status
+        status: currentAppt.status,
+        modalidad: currentAppt.modalidad,
+        comuna: currentAppt.modalidad === 'domicilio' ? currentAppt.comuna : null,
+        direccion: currentAppt.modalidad === 'domicilio' ? currentAppt.direccion.trim() : null,
+        servicio: currentAppt.servicio,
+        notas: currentAppt.notas || ''
       };
 
       let error;
@@ -413,24 +470,27 @@ export default function Agenda({ session, professionalId, profile }) {
   const openCreateModal = (prefillTime) => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
     const targetTime = prefillTime || `${selectedDate}T09:00`;
-    setCurrentAppt({ id: '', patient_id: '', start_time: targetTime, end_time: '', status: 'confirmed' });
+    
+    let defaultModalidad = 'presencial';
+    if (permitePresencial && !permiteDomicilio) defaultModalidad = 'presencial';
+    else if (!permitePresencial && permiteDomicilio) defaultModalidad = 'domicilio';
+    else if (permitePresencial && permiteDomicilio) defaultModalidad = 'presencial';
+
+    setCurrentAppt({
+      id: '',
+      patient_id: '',
+      start_time: targetTime,
+      end_time: '',
+      status: 'confirmed',
+      modalidad: defaultModalidad,
+      comuna: defaultModalidad === 'domicilio' ? (comunasDisponibles[0] || '') : '',
+      direccion: '',
+      servicio: serviciosDisponibles[0]?.nombre || '',
+      notas: ''
+    });
     setPatientMode('existing');
     setNewPatientData({ full_name: '', phone: '', email: '' });
     setModalMode('create');
-    setShowModal(true);
-  };
-
-  const openEditModal = (appointment) => {
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-    setCurrentAppt({
-      id: appointment.id,
-      patient_id: appointment.patient_id,
-      start_time: formatLocalDateTimeStr(new Date(appointment.start_time)),
-      end_time: appointment.end_time,
-      status: appointment.status
-    });
-    setPatientMode('existing');
-    setModalMode('edit');
     setShowModal(true);
   };
 
@@ -456,18 +516,18 @@ export default function Agenda({ session, professionalId, profile }) {
       </div>
 
       {activeTab === 'calendar' && (
-        <div className="space-y-4 rounded-xl border border-slate-200 bg-white p-4 shadow-2xs sm:p-6">
+        <div className="space-y-4 rounded-2xl border border-slate-200/80 bg-white p-4 shadow-xs sm:p-6">
           <div className="flex flex-col gap-3.5 border-b border-slate-100 pb-4 md:flex-row md:items-center md:justify-between">
             <div className="flex items-center justify-between gap-2">
-              <button onClick={handlePrevPeriod} className="rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2 font-bold text-slate-700 hover:bg-slate-100 cursor-pointer">&larr;</button>
-              <h2 className="min-w-0 flex-1 truncate text-center text-sm font-bold capitalize text-slate-800 sm:text-base">
+              <button onClick={handlePrevPeriod} className="rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2 font-bold text-slate-700 hover:bg-slate-100 cursor-pointer transition">&larr;</button>
+              <h2 className="min-w-0 flex-1 truncate text-center text-sm font-extrabold capitalize text-slate-800 sm:text-base">
                 {calendarView === 'year'
                   ? currentDateObj.getFullYear()
                   : calendarView === 'month'
                   ? currentDateObj.toLocaleString('es-ES', { month: 'long', year: 'numeric' })
                   : `${getDayName(new Date(selectedDate + 'T00:00:00').getDay())} ${selectedDate.split('-').reverse().join('-')}`}
               </h2>
-              <button onClick={handleNextPeriod} className="rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2 font-bold text-slate-700 hover:bg-slate-100 cursor-pointer">&rarr;</button>
+              <button onClick={handleNextPeriod} className="rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2 font-bold text-slate-700 hover:bg-slate-100 cursor-pointer transition">&rarr;</button>
             </div>
 
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
@@ -480,7 +540,7 @@ export default function Agenda({ session, professionalId, profile }) {
 
               <button
                 onClick={() => openCreateModal()}
-                className="w-full rounded-xl bg-sky-600 px-4 py-2.5 text-xs font-bold text-white shadow-sm transition-colors hover:bg-sky-700 cursor-pointer sm:w-auto sm:text-sm"
+                className="w-full rounded-xl bg-sky-600 px-4 py-2.5 text-xs font-bold text-white shadow-sm transition-all hover:bg-sky-700 cursor-pointer sm:w-auto sm:text-sm"
               >
                 + Añadir Cita
               </button>
@@ -488,7 +548,7 @@ export default function Agenda({ session, professionalId, profile }) {
           </div>
 
           {calendarView === 'day' && (
-            <div className="flex flex-col gap-2 rounded-xl border border-slate-200 bg-slate-50/60 p-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col gap-2 rounded-xl border border-slate-200/80 bg-slate-50/60 p-3 sm:flex-row sm:items-center sm:justify-between">
               <label className="text-xs font-bold text-slate-700">Seleccionar otra fecha:</label>
               <input
                 type="date"
@@ -497,7 +557,7 @@ export default function Agenda({ session, professionalId, profile }) {
                   setSelectedDate(e.target.value);
                   setCurrentDateObj(new Date(e.target.value + 'T00:00:00'));
                 }}
-                className="w-full rounded-xl border border-slate-300 bg-white p-2 text-xs font-semibold text-slate-800 sm:w-auto"
+                className="w-full rounded-xl border border-slate-300 bg-white p-2 text-xs font-semibold text-slate-800 sm:w-auto cursor-pointer"
               />
             </div>
           )}
@@ -514,36 +574,70 @@ export default function Agenda({ session, professionalId, profile }) {
                     </div>
                   ) : (
                     <div className="space-y-2">
-                      <div className="divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-200 bg-white">
+                      <div className="divide-y divide-slate-100 overflow-hidden rounded-2xl border border-slate-200/80 bg-white">
                         {timeSlots.map((slot, index) => (
-                          <div key={index} className="flex flex-col gap-2.5 p-3.5 transition hover:bg-slate-50/80 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:p-4">
-                            <div className="font-mono text-sm font-bold text-slate-700 sm:w-20 sm:text-base">
+                          <div key={index} className="flex flex-col gap-2.5 p-3.5 transition hover:bg-slate-50/60 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:p-4">
+                            <div className="font-mono text-sm font-bold text-slate-800 sm:w-20 sm:text-base">
                               {slot.time}
                             </div>
 
                             <div className="min-w-0 flex-1">
                               {slot.isBlocked ? (
-                                <span className="inline-block rounded-lg bg-red-50 px-3 py-1 text-xs font-semibold text-red-700 border border-red-100">
+                                <span className="inline-block rounded-xl bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 border border-red-100">
                                   🚫 Bloqueado ({slot.blockReason})
                                 </span>
                               ) : slot.appointment ? (
                                 <div
                                   onClick={() => openAppointmentDetail(slot.appointment)}
-                                  className="flex flex-col gap-2 rounded-xl border border-sky-200 bg-sky-50/70 p-3 cursor-pointer transition hover:bg-sky-100/70 sm:flex-row sm:items-center sm:justify-between"
+                                  className="flex flex-col gap-2 rounded-2xl border border-sky-200/80 bg-sky-50/50 p-3.5 cursor-pointer transition hover:bg-sky-100/60 hover:shadow-2xs sm:flex-row sm:items-center sm:justify-between"
                                 >
-                                  <div className="min-w-0">
-                                    <span className="block truncate font-bold text-sky-900 sm:inline">{slot.appointment.patients?.full_name || 'Paciente desconocido'}</span>
-                                    <span className="mt-1 inline-block rounded-full bg-emerald-100 px-2.5 py-0.5 text-[11px] font-bold uppercase text-emerald-800 sm:ml-2 sm:mt-0">
-                                      {slot.appointment.status}
-                                    </span>
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex items-center gap-2 flex-wrap mb-1">
+                                      <span className="truncate font-bold text-slate-900 text-sm capitalize">
+                                        {slot.appointment.patients?.full_name || 'Paciente desconocido'}
+                                      </span>
+
+                                      <span className="inline-flex items-center gap-1 rounded-full bg-sky-100 px-2.5 py-0.5 text-[11px] font-bold text-sky-800">
+                                        {slot.appointment.modalidad === 'domicilio'
+                                          ? `🏠 A Domicilio${slot.appointment.comuna ? ` (${slot.appointment.comuna})` : ''}`
+                                          : '🏥 Presencial'}
+                                      </span>
+
+                                      {slot.appointment.servicio && (
+                                        <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-[11px] font-semibold text-slate-600">
+                                          {slot.appointment.servicio}
+                                        </span>
+                                      )}
+
+                                      <span
+                                        className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold capitalize ${
+                                          slot.appointment.status === 'confirmed' || slot.appointment.status === 'confirmado'
+                                            ? 'bg-emerald-100 text-emerald-800'
+                                            : 'bg-amber-100 text-amber-800'
+                                        }`}
+                                      >
+                                        {slot.appointment.status === 'confirmed' || slot.appointment.status === 'confirmado'
+                                          ? 'Confirmada'
+                                          : 'Pendiente'}
+                                      </span>
+                                    </div>
+
+                                    {slot.appointment.modalidad === 'domicilio' && slot.appointment.direccion && (
+                                      <p className="text-xs text-sky-900 font-medium truncate">📍 Dir: {slot.appointment.direccion}</p>
+                                    )}
+
+                                    {slot.appointment.notas && (
+                                      <p className="text-xs text-slate-500 truncate">📝 {slot.appointment.notas}</p>
+                                    )}
                                   </div>
+
                                   <div className="flex shrink-0 gap-2 pt-1 sm:pt-0">
                                     <button
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        openEditModal(slot.appointment);
+                                        handleEditFromDetail(slot.appointment);
                                       }}
-                                      className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-sky-700 shadow-2xs hover:bg-slate-50"
+                                      className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-sky-700 shadow-2xs transition hover:bg-sky-50"
                                     >
                                       Editar
                                     </button>
@@ -552,14 +646,14 @@ export default function Agenda({ session, professionalId, profile }) {
                                         e.stopPropagation();
                                         handleDeleteAppointment(slot.appointment.id);
                                       }}
-                                      className="rounded-lg border border-red-200 bg-white px-2.5 py-1 text-xs font-semibold text-red-600 shadow-2xs hover:bg-red-50"
+                                      className="rounded-xl border border-red-200 bg-white px-3 py-1.5 text-xs font-bold text-red-600 shadow-2xs transition hover:bg-red-50"
                                     >
                                       Cancelar
                                     </button>
                                   </div>
                                 </div>
                               ) : (
-                                <span className="inline-block rounded-lg bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 border border-emerald-100">
+                                <span className="inline-flex items-center gap-1 rounded-xl bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 border border-emerald-100">
                                   ✔ Disponible
                                 </span>
                               )}
@@ -568,7 +662,7 @@ export default function Agenda({ session, professionalId, profile }) {
                             {!slot.appointment && !slot.isBlocked && (
                               <button
                                 onClick={() => openCreateModal(`${selectedDate}T${slot.time}`)}
-                                className="w-full shrink-0 rounded-xl bg-slate-100 px-3 py-2 text-xs font-bold text-slate-700 transition hover:bg-sky-600 hover:text-white sm:w-auto"
+                                className="w-full shrink-0 rounded-xl bg-slate-100 px-3.5 py-2 text-xs font-bold text-slate-700 transition hover:bg-sky-600 hover:text-white sm:w-auto"
                               >
                                 Agendar aquí
                               </button>
@@ -615,7 +709,7 @@ export default function Agenda({ session, professionalId, profile }) {
                                     className="cursor-pointer rounded-lg border border-sky-200 bg-sky-50/70 p-2 text-xs transition hover:bg-sky-100"
                                   >
                                     <span className="block font-bold text-sky-900">{formatLocalTimeStr(new Date(app.start_time))}</span>
-                                    <span className="truncate font-semibold text-slate-700">{app.patients?.full_name || 'Paciente'}</span>
+                                    <span className="truncate block font-semibold text-slate-700">{app.patients?.full_name || 'Paciente'}</span>
                                   </div>
                                 ))}
                                 {dayAppts.length === 0 && <p className="mt-6 text-center text-xs text-slate-400">Sin citas</p>}
@@ -625,7 +719,7 @@ export default function Agenda({ session, professionalId, profile }) {
                                   setSelectedDate(dateStr);
                                   setCalendarView('day');
                                 }}
-                                className="mt-2 block rounded-lg border border-slate-200 bg-slate-50 p-1.5 text-center text-xs font-bold text-sky-700 transition hover:bg-sky-100"
+                                className="mt-2 block rounded-lg border border-slate-200 bg-slate-50 p-1.5 text-center text-xs font-bold text-sky-700 transition hover:bg-sky-100 cursor-pointer"
                               >
                                 Ver día →
                               </button>
@@ -731,120 +825,292 @@ export default function Agenda({ session, professionalId, profile }) {
         </div>
       )}
 
+      {/* --- SECCIÓN MEJORADA DE HORARIOS BASE LABORALES --- */}
       {activeTab === 'config' && (
-        <div className="space-y-4">
-          <div className="rounded-xl border border-sky-200 bg-sky-50/70 p-4 text-xs font-semibold text-sky-900">
-            <strong>Nota importante:</strong> Todo horario fuera del establecido por el profesional estará bloqueado por defecto y el paciente no podrá agendar en las horas bloqueadas.
+        <div className="space-y-6">
+          <div className="flex items-center gap-3 rounded-2xl border border-sky-200 bg-gradient-to-r from-sky-50 to-blue-50/50 p-4 text-xs font-medium text-sky-950 shadow-xs">
+            <span className="text-xl">💡</span>
+            <div>
+              <strong className="block font-bold text-sky-900">Configuración de Jornada Laboral</strong>
+              <span>Los horarios que no registres aquí se mostrarán cerrados/bloqueados automáticamente en la agenda del paciente.</span>
+            </div>
           </div>
 
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-2xs sm:p-6">
-            <h2 className="mb-1 text-base font-bold text-slate-800 sm:text-lg">Horarios Base Laborales</h2>
-            <p className="mb-4 text-xs text-slate-500">Define los bloques en los que atiendes. Cualquier espacio ajeno a estos turnos se cerrará automáticamente.</p>
-
-            <div className="mb-4 flex flex-col gap-3.5 rounded-xl border border-slate-100 bg-slate-50 p-3.5 sm:flex-row sm:flex-wrap sm:gap-6">
-              <div>
-                <span className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-slate-400">Aplicación de Días:</span>
-                <div className="flex flex-col gap-2 sm:flex-row sm:gap-4">
-                  <label className="flex cursor-pointer items-center gap-2 text-xs font-semibold text-slate-700">
-                    <input type="radio" name="availMode" checked={availMode === 'range_days'} onChange={() => setAvailMode('range_days')} className="accent-sky-600" />
-                    Rango de días (Ej. Lunes a Viernes)
-                  </label>
-                  <label className="flex cursor-pointer items-center gap-2 text-xs font-semibold text-slate-700">
-                    <input type="radio" name="availMode" checked={availMode === 'single_day'} onChange={() => setAvailMode('single_day')} className="accent-sky-600" />
-                    Día único específico
-                  </label>
-                </div>
-              </div>
-
-              <div>
-                <span className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-slate-400">Vigencia temporal:</span>
-                <div className="flex flex-col gap-2 sm:flex-row sm:gap-4">
-                  <label className="flex cursor-pointer items-center gap-2 text-xs font-semibold text-slate-700">
-                    <input type="radio" name="scheduleType" checked={newAvail.is_permanent_schedule} onChange={() => setNewAvail({ ...newAvail, is_permanent_schedule: true })} className="accent-sky-600" />
-                    Permanente (Indefinido)
-                  </label>
-                  <label className="flex cursor-pointer items-center gap-2 text-xs font-semibold text-slate-700">
-                    <input type="radio" name="scheduleType" checked={!newAvail.is_permanent_schedule} onChange={() => setNewAvail({ ...newAvail, is_permanent_schedule: false })} className="accent-sky-600" />
-                    Por Rango de Fechas
-                  </label>
-                </div>
-              </div>
+          {/* Formulario de Configuración */}
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs sm:p-6 space-y-6">
+            <div>
+              <h2 className="text-base font-extrabold text-slate-800 sm:text-lg">⚙️ Configurar Nuevos Turnos</h2>
+              <p className="text-xs text-slate-500">Añade rangos de horas o días específicos para construir tu horario semanal.</p>
             </div>
 
-            <form onSubmit={handleAddAvailability} className="mb-6 grid grid-cols-1 items-end gap-3.5 sm:grid-cols-2 lg:grid-cols-7">
-              {availMode === 'range_days' ? (
-                <>
-                  <div>
-                    <label className="mb-1 block text-xs font-semibold text-slate-700">Desde el día</label>
-                    <select value={newAvail.start_day} onChange={(e) => setNewAvail({ ...newAvail, start_day: Number(e.target.value) })} className="w-full rounded-xl border border-slate-300 bg-white p-2.5 text-xs font-semibold">
-                      {[1, 2, 3, 4, 5, 6, 0].map(d => (<option key={d} value={d}>{getDayName(d)}</option>))}
-                    </select>
+            <form onSubmit={handleAddAvailability} className="space-y-5">
+              {/* Opciones de Selección con Selector de Pestañas / Segmented Controls */}
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                {/* Selector 1: Modalidad Días */}
+                <div className="rounded-xl border border-slate-200/80 bg-slate-50/70 p-3.5 space-y-2">
+                  <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500 block">
+                    1. Selección de Días
+                  </span>
+                  <div className="grid grid-cols-2 gap-1.5 rounded-lg bg-slate-200/60 p-1">
+                    <button
+                      type="button"
+                      onClick={() => setAvailMode('range_days')}
+                      className={`rounded-md py-2 text-xs font-bold transition-all cursor-pointer ${
+                        availMode === 'range_days'
+                          ? 'bg-white text-sky-700 shadow-xs'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      🗓️ Rango de Días
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAvailMode('single_day')}
+                      className={`rounded-md py-2 text-xs font-bold transition-all cursor-pointer ${
+                        availMode === 'single_day'
+                          ? 'bg-white text-sky-700 shadow-xs'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      📌 Día Único
+                    </button>
                   </div>
-                  <div>
-                    <label className="mb-1 block text-xs font-semibold text-slate-700">Hasta el día</label>
-                    <select value={newAvail.end_day} onChange={(e) => setNewAvail({ ...newAvail, end_day: Number(e.target.value) })} className="w-full rounded-xl border border-slate-300 bg-white p-2.5 text-xs font-semibold">
-                      {[1, 2, 3, 4, 5, 6, 0].map(d => (<option key={d} value={d}>{getDayName(d)}</option>))}
-                    </select>
-                  </div>
-                </>
-              ) : (
-                <div className="sm:col-span-2">
-                  <label className="mb-1 block text-xs font-semibold text-slate-700">Día de la semana</label>
-                  <select value={newAvail.single_day} onChange={(e) => setNewAvail({ ...newAvail, single_day: Number(e.target.value) })} className="w-full rounded-xl border border-slate-300 bg-white p-2.5 text-xs font-semibold">
-                    {[1, 2, 3, 4, 5, 6, 0].map(d => (<option key={d} value={d}>{getDayName(d)}</option>))}
-                  </select>
                 </div>
-              )}
 
-              <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-700">Hora Inicio</label>
-                <input type="time" value={newAvail.start_time} onChange={(e) => setNewAvail({ ...newAvail, start_time: e.target.value })} className="w-full rounded-xl border border-slate-300 bg-white p-2.5 text-xs font-semibold" required />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-700">Hora Fin</label>
-                <input type="time" value={newAvail.end_time} onChange={(e) => setNewAvail({ ...newAvail, end_time: e.target.value })} className="w-full rounded-xl border border-slate-300 bg-white p-2.5 text-xs font-semibold" required />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-700">Bloque (min)</label>
-                <input type="number" value={newAvail.slot_duration_minutes} onChange={(e) => setNewAvail({ ...newAvail, slot_duration_minutes: Number(e.target.value) })} className="w-full rounded-xl border border-slate-300 bg-white p-2.5 text-xs font-semibold" step="5" min="5" required />
+                {/* Selector 2: Vigencia */}
+                <div className="rounded-xl border border-slate-200/80 bg-slate-50/70 p-3.5 space-y-2">
+                  <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500 block">
+                    2. Vigencia del Horario
+                  </span>
+                  <div className="grid grid-cols-2 gap-1.5 rounded-lg bg-slate-200/60 p-1">
+                    <button
+                      type="button"
+                      onClick={() => setNewAvail({ ...newAvail, is_permanent_schedule: true })}
+                      className={`rounded-md py-2 text-xs font-bold transition-all cursor-pointer ${
+                        newAvail.is_permanent_schedule
+                          ? 'bg-white text-sky-700 shadow-xs'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      ♾️ Permanente
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setNewAvail({ ...newAvail, is_permanent_schedule: false })}
+                      className={`rounded-md py-2 text-xs font-bold transition-all cursor-pointer ${
+                        !newAvail.is_permanent_schedule
+                          ? 'bg-white text-sky-700 shadow-xs'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      📅 Rango de Fechas
+                    </button>
+                  </div>
+                </div>
               </div>
 
-              <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-700">Intervalo (min)</label>
-                <input type="number" value={newAvail.interval_minutes} onChange={(e) => setNewAvail({ ...newAvail, interval_minutes: Number(e.target.value) })} className="w-full rounded-xl border border-slate-300 bg-white p-2.5 text-xs font-semibold" step="5" min="0" />
+              {/* Fila de Selección de Días y Tiempos */}
+              <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-6 items-end pt-1">
+                {availMode === 'range_days' ? (
+                  <>
+                    <div>
+                      <label className="mb-1 block text-xs font-bold text-slate-700">Desde el día</label>
+                      <select
+                        value={newAvail.start_day}
+                        onChange={(e) => setNewAvail({ ...newAvail, start_day: Number(e.target.value) })}
+                        className="w-full rounded-xl border border-slate-300 bg-white p-2.5 text-xs font-semibold text-slate-800 focus:border-sky-500 focus:outline-hidden transition cursor-pointer"
+                      >
+                        {[1, 2, 3, 4, 5, 6, 0].map((d) => (
+                          <option key={d} value={d}>{getDayName(d)}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-bold text-slate-700">Hasta el día</label>
+                      <select
+                        value={newAvail.end_day}
+                        onChange={(e) => setNewAvail({ ...newAvail, end_day: Number(e.target.value) })}
+                        className="w-full rounded-xl border border-slate-300 bg-white p-2.5 text-xs font-semibold text-slate-800 focus:border-sky-500 focus:outline-hidden transition cursor-pointer"
+                      >
+                        {[1, 2, 3, 4, 5, 6, 0].map((d) => (
+                          <option key={d} value={d}>{getDayName(d)}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </>
+                ) : (
+                  <div className="sm:col-span-2">
+                    <label className="mb-1 block text-xs font-bold text-slate-700">Día de la Semana</label>
+                    <select
+                      value={newAvail.single_day}
+                      onChange={(e) => setNewAvail({ ...newAvail, single_day: Number(e.target.value) })}
+                      className="w-full rounded-xl border border-slate-300 bg-white p-2.5 text-xs font-semibold text-slate-800 focus:border-sky-500 focus:outline-hidden transition cursor-pointer"
+                    >
+                      {[1, 2, 3, 4, 5, 6, 0].map((d) => (
+                        <option key={d} value={d}>{getDayName(d)}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                <div>
+                  <label className="mb-1 block text-xs font-bold text-slate-700">Hora Inicio</label>
+                  <input
+                    type="time"
+                    value={newAvail.start_time}
+                    onChange={(e) => setNewAvail({ ...newAvail, start_time: e.target.value })}
+                    className="w-full rounded-xl border border-slate-300 bg-white p-2.5 text-xs font-semibold text-slate-800 focus:border-sky-500 focus:outline-hidden transition cursor-pointer"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-xs font-bold text-slate-700">Hora Fin</label>
+                  <input
+                    type="time"
+                    value={newAvail.end_time}
+                    onChange={(e) => setNewAvail({ ...newAvail, end_time: e.target.value })}
+                    className="w-full rounded-xl border border-slate-300 bg-white p-2.5 text-xs font-semibold text-slate-800 focus:border-sky-500 focus:outline-hidden transition cursor-pointer"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-xs font-bold text-slate-700">Duración Cita (min)</label>
+                  <input
+                    type="number"
+                    value={newAvail.slot_duration_minutes}
+                    onChange={(e) => setNewAvail({ ...newAvail, slot_duration_minutes: Number(e.target.value) })}
+                    className="w-full rounded-xl border border-slate-300 bg-white p-2.5 text-xs font-semibold text-slate-800 focus:border-sky-500 focus:outline-hidden transition"
+                    step="5"
+                    min="5"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-xs font-bold text-slate-700">Descanso (min)</label>
+                  <input
+                    type="number"
+                    value={newAvail.interval_minutes}
+                    onChange={(e) => setNewAvail({ ...newAvail, interval_minutes: Number(e.target.value) })}
+                    className="w-full rounded-xl border border-slate-300 bg-white p-2.5 text-xs font-semibold text-slate-800 focus:border-sky-500 focus:outline-hidden transition"
+                    step="5"
+                    min="0"
+                  />
+                </div>
               </div>
 
               {!newAvail.is_permanent_schedule && (
-                <>
+                <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 rounded-xl border border-amber-200 bg-amber-50/50 p-3.5">
                   <div>
-                    <label className="mb-1 block text-xs font-semibold text-slate-700">Fecha inicio vigencia</label>
-                    <input type="date" value={newAvail.valid_from} onChange={(e) => setNewAvail({ ...newAvail, valid_from: e.target.value })} className="w-full rounded-xl border border-slate-300 bg-white p-2.5 text-xs font-semibold" required />
+                    <label className="mb-1 block text-xs font-bold text-slate-700">Vigente Desde</label>
+                    <input
+                      type="date"
+                      value={newAvail.valid_from}
+                      onChange={(e) => setNewAvail({ ...newAvail, valid_from: e.target.value })}
+                      className="w-full rounded-xl border border-slate-300 bg-white p-2 text-xs font-semibold cursor-pointer"
+                      required
+                    />
                   </div>
                   <div>
-                    <label className="mb-1 block text-xs font-semibold text-slate-700">Fecha fin vigencia</label>
-                    <input type="date" value={newAvail.valid_until} onChange={(e) => setNewAvail({ ...newAvail, valid_until: e.target.value })} className="w-full rounded-xl border border-slate-300 bg-white p-2.5 text-xs font-semibold" required />
+                    <label className="mb-1 block text-xs font-bold text-slate-700">Vigente Hasta</label>
+                    <input
+                      type="date"
+                      value={newAvail.valid_until}
+                      onChange={(e) => setNewAvail({ ...newAvail, valid_until: e.target.value })}
+                      className="w-full rounded-xl border border-slate-300 bg-white p-2 text-xs font-semibold cursor-pointer"
+                      required
+                    />
                   </div>
-                </>
+                </div>
               )}
 
-              <button type="submit" className="w-full rounded-xl bg-emerald-600 px-4 py-3 text-xs font-bold text-white transition hover:bg-emerald-700 cursor-pointer sm:col-span-2 lg:col-span-7">Añadir Turno Laboral</button>
+              <button
+                type="submit"
+                className="w-full rounded-xl bg-sky-600 px-4 py-3 text-xs font-bold text-white shadow-sm transition-all hover:bg-sky-700 cursor-pointer"
+              >
+                + Añadir Horario a la Agenda
+              </button>
             </form>
+          </div>
 
-            <div className="space-y-2">
-              {availability.map((av) => (
-                <div key={av.id} className="flex flex-col gap-2 rounded-xl border border-slate-200 bg-slate-50/60 p-3.5 sm:flex-row sm:items-center sm:justify-between">
-                  <span className="text-xs font-medium text-slate-700">
-                    <strong className="text-slate-900">{getDayName(av.day_of_week)}:</strong> {av.start_time} - {av.end_time} (Bloque: {av.slot_duration_minutes} min{av.interval_minutes ? `, Intervalo: ${av.interval_minutes} min` : ''}) {av.is_permanent_schedule ? '(Permanente)' : `(Del ${av.valid_from} al ${av.valid_until})`}
-                  </span>
-                  <button onClick={() => handleDeleteAvailability(av.id)} className="self-start text-xs font-bold text-red-500 hover:text-red-700 cursor-pointer sm:self-auto">Eliminar</button>
-                </div>
-              ))}
-              {availability.length === 0 && <p className="text-xs text-slate-400">No hay horarios base configurados. Todo aparecerá bloqueado.</p>}
+          {/* Tarjetas de Turnos Registrados (Agrupados por Día) */}
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs sm:p-6 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div>
+                <h3 className="text-base font-extrabold text-slate-800">📋 Turnos Activos Configurados</h3>
+                <p className="text-xs text-slate-500">Resumen de horarios en los que tus clientes pueden agendar.</p>
+              </div>
+              <span className="rounded-full bg-sky-100 px-3 py-1 text-xs font-bold text-sky-800">
+                {availability.length} {availability.length === 1 ? 'Turno' : 'Turnos'}
+              </span>
             </div>
+
+            {availability.length === 0 ? (
+              <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-8 text-center text-xs font-medium text-slate-500">
+                Aún no has configurado ningún horario laboral. Agrega uno arriba para abrir tu agenda.
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {availability
+                  .sort((a, b) => (a.day_of_week === 0 ? 7 : a.day_of_week) - (b.day_of_week === 0 ? 7 : b.day_of_week))
+                  .map((av) => (
+                    <div
+                      key={av.id}
+                      className="flex flex-col justify-between rounded-xl border border-slate-200/80 bg-slate-50/50 p-4 transition-all hover:border-sky-300 hover:shadow-2xs"
+                    >
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="rounded-lg bg-sky-600 px-2.5 py-1 text-xs font-extrabold text-white capitalize">
+                            {getDayName(av.day_of_week)}
+                          </span>
+                          <span className="text-[11px] font-semibold text-slate-400">
+                            {av.is_permanent_schedule ? '♾️ Permanente' : '📅 Temporal'}
+                          </span>
+                        </div>
+
+                        <div className="my-2">
+                          <span className="text-base font-extrabold text-slate-900 font-mono">
+                            {av.start_time.slice(0, 5)} — {av.end_time.slice(0, 5)} hrs
+                          </span>
+                        </div>
+
+                        <div className="flex flex-wrap gap-1.5 text-[11px] text-slate-600 mt-2">
+                          <span className="rounded-md bg-white border border-slate-200 px-2 py-0.5 font-medium">
+                            ⏱️ Citas: {av.slot_duration_minutes} min
+                          </span>
+                          {av.interval_minutes > 0 && (
+                            <span className="rounded-md bg-white border border-slate-200 px-2 py-0.5 font-medium">
+                              ☕ Pausa: {av.interval_minutes} min
+                            </span>
+                          )}
+                        </div>
+
+                        {!av.is_permanent_schedule && av.valid_from && (
+                          <p className="mt-2 text-[11px] font-medium text-amber-700">
+                            Del {av.valid_from} al {av.valid_until}
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="mt-4 pt-2 border-t border-slate-200/60 flex justify-end">
+                        <button
+                          onClick={() => handleDeleteAvailability(av.id)}
+                          className="rounded-lg px-2.5 py-1 text-xs font-bold text-red-600 hover:bg-red-50 transition cursor-pointer"
+                        >
+                          Eliminar
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            )}
           </div>
         </div>
       )}
 
+      {/* Modal de Creación / Edición */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-start justify-center p-4 pt-12 sm:pt-16 bg-black/50 backdrop-blur-xs">
           <div className="max-h-[85vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl sm:p-6">
@@ -873,7 +1139,7 @@ export default function Agenda({ session, professionalId, profile }) {
               {patientMode === 'existing' || modalMode === 'edit' ? (
                 <div>
                   <label className="mb-1 block text-xs font-semibold text-slate-700">Paciente</label>
-                  <select value={currentAppt.patient_id} onChange={(e) => setCurrentAppt({ ...currentAppt, patient_id: e.target.value })} className="w-full rounded-xl border border-slate-300 bg-white p-2.5 text-xs font-semibold" required>
+                  <select value={currentAppt.patient_id} onChange={(e) => setCurrentAppt({ ...currentAppt, patient_id: e.target.value })} className="w-full rounded-xl border border-slate-300 bg-white p-2.5 text-xs font-semibold cursor-pointer" required>
                     <option value="">-- Elige un paciente --</option>
                     {patients.map((p) => (
                       <option key={p.id} value={p.id}>{p.full_name}</option>
@@ -920,27 +1186,122 @@ export default function Agenda({ session, professionalId, profile }) {
               )}
 
               <div>
+                <label className="mb-1 block text-xs font-semibold text-slate-700">Servicio</label>
+                <select
+                  value={currentAppt.servicio}
+                  onChange={(e) => setCurrentAppt({ ...currentAppt, servicio: e.target.value })}
+                  className="w-full rounded-xl border border-slate-300 bg-white p-2.5 text-xs font-semibold cursor-pointer"
+                  required
+                >
+                  <option value="">-- Selecciona un servicio --</option>
+                  {serviciosDisponibles.map((s, idx) => (
+                    <option key={idx} value={s.nombre}>
+                      {s.nombre} — ${s.precio?.toLocaleString('es-CL')} CLP
+                    </option>
+                  ))}
+                </select>
+                {serviciosDisponibles.length === 0 && (
+                  <p className="mt-1 text-xs text-amber-600">No hay servicios configurados en tu perfil.</p>
+                )}
+              </div>
+
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-slate-700">Modalidad de Atención</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {permitePresencial && (
+                    <button
+                      type="button"
+                      onClick={() => setCurrentAppt({ ...currentAppt, modalidad: 'presencial', comuna: '', direccion: '' })}
+                      className={`rounded-xl border p-2 text-xs font-bold transition cursor-pointer ${
+                        currentAppt.modalidad === 'presencial'
+                          ? 'border-sky-600 bg-sky-50 text-sky-700'
+                          : 'border-slate-200 bg-white text-slate-600'
+                      }`}
+                    >
+                      🏥 Presencial
+                    </button>
+                  )}
+                  {permiteDomicilio && (
+                    <button
+                      type="button"
+                      onClick={() => setCurrentAppt({ ...currentAppt, modalidad: 'domicilio' })}
+                      className={`rounded-xl border p-2 text-xs font-bold transition cursor-pointer ${
+                        currentAppt.modalidad === 'domicilio'
+                          ? 'border-sky-600 bg-sky-50 text-sky-700'
+                          : 'border-slate-200 bg-white text-slate-600'
+                      }`}
+                    >
+                      🏠 A Domicilio
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {currentAppt.modalidad === 'domicilio' && (
+                <div className="space-y-3.5 rounded-xl border border-slate-200 bg-slate-50/60 p-3.5">
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-slate-700">Comuna de Cobertura *</label>
+                    <select
+                      value={currentAppt.comuna}
+                      onChange={(e) => setCurrentAppt({ ...currentAppt, comuna: e.target.value })}
+                      className="w-full rounded-xl border border-slate-300 bg-white p-2.5 text-xs font-semibold cursor-pointer"
+                      required
+                    >
+                      <option value="">-- Elige la comuna --</option>
+                      {comunasDisponibles.map((c, idx) => (
+                        <option key={idx} value={c}>{c}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-slate-700">Dirección Exacta *</label>
+                    <input
+                      type="text"
+                      value={currentAppt.direccion}
+                      onChange={(e) => setCurrentAppt({ ...currentAppt, direccion: e.target.value })}
+                      placeholder="Ej. Av. Vicuña Mackenna 4320, Depto 42"
+                      className="w-full rounded-xl border border-slate-300 bg-white p-2.5 text-xs font-semibold"
+                      required
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div>
                 <label className="mb-1 block text-xs font-semibold text-slate-700">Fecha y Hora</label>
                 <input
                   type="datetime-local"
                   min={modalMode === 'create' ? getCurrentLocalDateTimeMin() : undefined}
                   value={currentAppt.start_time || ''}
                   onChange={(e) => setCurrentAppt({ ...currentAppt, start_time: e.target.value })}
-                  className="w-full rounded-xl border border-slate-300 bg-white p-2.5 text-xs font-semibold"
+                  className="w-full rounded-xl border border-slate-300 bg-white p-2.5 text-xs font-semibold cursor-pointer"
                   required
                 />
               </div>
+
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-slate-700">Notas / Recomendaciones adicionales</label>
+                <input
+                  type="text"
+                  value={currentAppt.notas}
+                  onChange={(e) => setCurrentAppt({ ...currentAppt, notas: e.target.value })}
+                  placeholder="Ej. Asistir sin esmalte..."
+                  className="w-full rounded-xl border border-slate-300 bg-white p-2.5 text-xs font-semibold"
+                />
+              </div>
+
               <div>
                 <label className="mb-1 block text-xs font-semibold text-slate-700">Estado</label>
-                <select value={currentAppt.status} onChange={(e) => setCurrentAppt({ ...currentAppt, status: e.target.value })} className="w-full rounded-xl border border-slate-300 bg-white p-2.5 text-xs font-semibold">
+                <select value={currentAppt.status} onChange={(e) => setCurrentAppt({ ...currentAppt, status: e.target.value })} className="w-full rounded-xl border border-slate-300 bg-white p-2.5 text-xs font-semibold cursor-pointer">
                   <option value="confirmed">Confirmada</option>
                   <option value="pending">Pendiente</option>
                   <option value="cancelled">Cancelada</option>
                 </select>
               </div>
+
               <div className="flex flex-col-reverse gap-2 pt-3 sm:flex-row sm:justify-end">
-                <button type="button" onClick={() => setShowModal(false)} className="rounded-xl bg-slate-200 px-4 py-2.5 text-xs font-bold text-slate-700 cursor-pointer">Cancelar</button>
-                <button type="submit" disabled={savingAppt} className="rounded-xl bg-sky-600 px-4 py-2.5 text-xs font-bold text-white disabled:opacity-60 cursor-pointer">
+                <button type="button" onClick={() => setShowModal(false)} className="rounded-xl bg-slate-200 px-4 py-2.5 text-xs font-bold text-slate-700 cursor-pointer transition hover:bg-slate-300">Cancelar</button>
+                <button type="submit" disabled={savingAppt} className="rounded-xl bg-sky-600 px-4 py-2.5 text-xs font-bold text-white disabled:opacity-60 cursor-pointer transition hover:bg-sky-700">
                   {savingAppt ? 'Guardando...' : 'Guardar Cita'}
                 </button>
               </div>
@@ -955,7 +1316,7 @@ export default function Agenda({ session, professionalId, profile }) {
           onClose={() => setSelectedAppointment(null)}
           onEdit={handleEditFromDetail}
           onCancelAppointment={handleCancelFromDetail}
-          profile={profile}
+          profile={currentProfile}
         />
       )}
     </div>

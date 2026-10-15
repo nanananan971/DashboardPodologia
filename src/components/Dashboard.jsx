@@ -102,7 +102,6 @@ export default function Dashboard({ session, professionalId, onNavigate, profile
         </p>
       </div>
 
-      {/* Tarjetas de resumen en columna para móvil, 3 columnas en desktop */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-2xs">
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Citas de hoy</p>
@@ -120,7 +119,6 @@ export default function Dashboard({ session, professionalId, onNavigate, profile
         </div>
       </div>
 
-      {/* Accesos rápidos adaptados a móvil (botones en bloque o flex wrap) */}
       <div className="flex flex-col gap-2.5 sm:flex-row">
         <button
           onClick={() => onNavigate?.('agenda')}
@@ -136,7 +134,6 @@ export default function Dashboard({ session, professionalId, onNavigate, profile
         </button>
       </div>
 
-      {/* Resumen de citas de hoy */}
       <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-2xs sm:p-6">
         <div className="mb-4 flex items-center justify-between">
           <h3 className="text-base font-bold text-slate-800">Citas de Hoy</h3>
@@ -172,9 +169,21 @@ export default function Dashboard({ session, professionalId, onNavigate, profile
                   <span className="w-14 shrink-0 font-mono text-xs font-bold text-slate-700 sm:text-sm">
                     {formatHoraLegible(app.start_time)}
                   </span>
-                  <span className="truncate text-sm font-semibold text-slate-900">
-                    {app.patients?.full_name || 'Paciente desconocido'}
-                  </span>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="truncate text-sm font-semibold text-slate-900">
+                        {app.patients?.full_name || 'Paciente desconocido'}
+                      </span>
+                      <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                        app.modalidad === 'domicilio' ? 'bg-amber-100 text-amber-800' : 'bg-sky-100 text-sky-800'
+                      }`}>
+                        {app.modalidad === 'domicilio' ? '🏠 Domicilio' : '🏥 Presencial'}
+                      </span>
+                    </div>
+                    {app.notas && (
+                      <p className="text-xs text-slate-500 truncate mt-0.5">{app.notas}</p>
+                    )}
+                  </div>
                 </div>
                 <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${STATUS_BADGE[app.status] || 'bg-slate-100 text-slate-700'}`}>
                   {app.status}

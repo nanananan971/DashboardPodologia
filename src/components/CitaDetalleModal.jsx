@@ -1,174 +1,189 @@
 // src/components/CitaDetalleModal.jsx
-// Tarjeta/modal reutilizable que muestra el detalle completo de una cita.
-// Se usa tanto desde el Dashboard (inicio) como desde la Agenda (calendario).
-//
-// NOTA IMPORTANTE SOBRE EL NOMBRE DE ESTE ARCHIVO:
-// Antes se llamaba "CitaDetallemodal.jsx" pero se importaba en otros
-// componentes como `import CitaDetallemodal from './CitaDetallemodal'` y
-// luego se usaba en el JSX como `<CitaDetalleModal .../>` (con M mayúscula).
-// Como JavaScript distingue mayúsculas de minúsculas, esa "M" vs "m" hacía
-// que la app tirara un error "CitaDetalleModal is not defined" apenas
-// alguien intentaba abrir el detalle de una cita. Ya está corregido en
-// Dashboard.jsx y Agenda.jsx: ahora todos importan `CitaDetalleModal`
-// (con M mayúscula) desde este mismo archivo.
 
-import { formatFechaLegible, formatHoraLegible } from '../lib/datetime'
-
-const STATUS_INFO = {
-  confirmed: { label: 'Confirmada', className: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-  confirmado: { label: 'Confirmada', className: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-  pending: { label: 'Pendiente', className: 'bg-amber-50 text-amber-700 border-amber-200' },
-  agendado: { label: 'Agendada', className: 'bg-sky-50 text-sky-700 border-sky-200' },
-  cancelled: { label: 'Cancelada', className: 'bg-red-50 text-red-700 border-red-200' },
-  cancelado: { label: 'Cancelada', className: 'bg-red-50 text-red-700 border-red-200' },
-  completado: { label: 'Completada', className: 'bg-slate-100 text-slate-700 border-slate-200' },
-}
+import React from 'react';
 
 export default function CitaDetalleModal({ appointment, onClose, onEdit, onCancelAppointment, profile }) {
-  if (!appointment) return null
+  if (!appointment) return null;
 
-  const patient = appointment.patients || {}
-  const statusInfo = STATUS_INFO[appointment.status] || {
-    label: appointment.status || 'Sin estado',
-    className: 'bg-slate-100 text-slate-700 border-slate-200',
-  }
-  const isCancelled = appointment.status === 'cancelled' || appointment.status === 'cancelado'
+  const esDomicilio = appointment.modalidad === 'domicilio';
+  const comunaNombre = appointment.comuna || '';
+  const direccionExacta = appointment.direccion || '';
 
-  // Arma el link de WhatsApp con el mensaje de recordatorio ya redactado,
-  // usando el nombre de la clínica y del profesional configurados en
-  // "Configuración". Si el paciente no tiene teléfono registrado, no hay
-  // link (el botón queda deshabilitado).
-  const buildWhatsappLink = () => {
-    const telefono = (patient.phone || '').replace(/\D/g, '')
-    if (!telefono) return null
+  // Solo mostramos la etiqueta limpia sin paréntesis de comuna
+  const modalidadLabel = esDomicilio ? '🏠 A Domicilio' : '🏥 Presencial en Consulta';
 
-    const clinica = profile?.clinic_name || 'nuestra clínica'
-    const profesional = profile?.full_name || 'tu profesional'
-    const mensaje =
-      `Hola ${patient.full_name || ''}, te recordamos tu cita agendada para el día ` +
-      `${formatFechaLegible(appointment.start_time)} a las ${formatHoraLegible(appointment.start_time)} ` +
-      `en ${clinica} con el profesional ${profesional}. ¡Te esperamos!`
+  const formatFechaLong = (dateStr) => {
+    try {
+      const d = new Date(dateStr);
+      return d.toLocaleDateString('es-ES', {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric'
+      });
+    } catch {
+      return dateStr;
+    }
+  };
 
-    return `https://wa.me/${telefono}?text=${encodeURIComponent(mensaje)}`
-  }
+  const formatHora = (dateStr) => {
+    try {
+      const d = new Date(dateStr);
+      return d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', hour12: false });
+    } catch {
+      return '';
+    }
+  };
 
-  const whatsappLink = buildWhatsappLink()
+  const handleWspClick = () => {
+    const phone = appointment.patients?.phone || '';
+    if (!phone) {
+      alert('El paciente no tiene un número de teléfono registrado.');
+      return;
+    }
+
+    const cleanPhone = phone.replace(/\D/g, '');
+    const patientName = appointment.patients?.full_name || 'Paciente';
+    const fecha = formatFechaLong(appointment.start_time);
+    const hora = formatHora(appointment.start_time);
+
+    const mensaje = encodeURIComponent(
+      `Hola ${patientName}, te recordamos tu cita podológica agendada para el ${fecha} a las ${hora} hrs. ¡Te esperamos!`
+    );
+
+    window.open(`https://wa.me/${cleanPhone}?text=${mensaje}`, '_blank');
+  };
 
   return (
-    <div
-      className="animate-overlay fixed inset-0 z-[100] flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4"
-      onClick={onClose}
-    >
-      <div
-        className="animate-modal-sheet max-h-[92vh] w-full max-w-md overflow-y-auto rounded-t-2xl bg-white p-5 shadow-2xl sm:rounded-xl sm:p-6"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Handle visual para indicar "arrastrar" en móvil */}
-        <div className="mx-auto mb-3 h-1.5 w-10 rounded-full bg-slate-200 sm:hidden" />
-
-        <div className="mb-4 flex items-start justify-between gap-3">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
+      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl animate-fade-in-up">
+        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
           <div>
-            <h3 className="text-lg font-semibold text-slate-900">Detalle de la Cita</h3>
-            <p className="text-xs text-slate-500">Información completa de la reserva</p>
+            <h3 className="text-lg font-bold text-slate-800">Detalle de la Cita</h3>
+            <p className="text-xs text-slate-400">Información completa de la reserva</p>
           </div>
           <button
             onClick={onClose}
-            className="shrink-0 rounded-full p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 cursor-pointer"
-            aria-label="Cerrar"
+            className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 cursor-pointer transition"
           >
             ✕
           </button>
         </div>
 
-        <span className={`inline-block rounded-full border px-3 py-1 text-xs font-semibold ${statusInfo.className}`}>
-          {statusInfo.label}
-        </span>
-
-        <div className="mt-4 space-y-3 text-sm">
-          <div className="flex items-center justify-between gap-3 border-b border-slate-100 pb-2.5">
-            <span className="text-slate-500">Paciente</span>
-            <span className="text-right font-medium text-slate-900">{patient.full_name || 'Paciente desconocido'}</span>
-          </div>
-
-          {patient.phone && (
-            <div className="flex items-center justify-between gap-3 border-b border-slate-100 pb-2.5">
-              <span className="text-slate-500">Teléfono</span>
-              <span className="text-right font-medium text-slate-900">{patient.phone}</span>
-            </div>
-          )}
-
-          {patient.email && (
-            <div className="flex items-center justify-between gap-3 border-b border-slate-100 pb-2.5">
-              <span className="text-slate-500">Correo</span>
-              <span className="text-right font-medium text-slate-900">{patient.email}</span>
-            </div>
-          )}
-
-          <div className="flex items-center justify-between gap-3 border-b border-slate-100 pb-2.5">
-            <span className="text-slate-500">Fecha</span>
-            <span className="text-right font-medium text-slate-900">{formatFechaLegible(appointment.start_time)}</span>
-          </div>
-
-          <div className="flex items-center justify-between gap-3">
-            <span className="text-slate-500">Horario</span>
-            <span className="text-right font-medium text-slate-900">
-              {formatHoraLegible(appointment.start_time)} — {formatHoraLegible(appointment.end_time)}
+        <div className="mt-4 space-y-3.5 text-xs text-slate-700">
+          <div className="flex items-center justify-between">
+            <span className="font-semibold text-slate-500">Estado</span>
+            <span
+              className={`rounded-full px-3 py-0.5 text-[11px] font-bold uppercase ${
+                appointment.status === 'confirmed' || appointment.status === 'confirmado'
+                  ? 'bg-emerald-100 text-emerald-800'
+                  : 'bg-amber-100 text-amber-800'
+              }`}
+            >
+              {appointment.status === 'confirmed' || appointment.status === 'confirmado'
+                ? 'CONFIRMADA'
+                : 'PENDIENTE'}
             </span>
           </div>
-        </div>
 
-        <div className="mt-4 rounded-lg border border-slate-200 p-3.5">
-          <a
-            href={whatsappLink || undefined}
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-disabled={!whatsappLink}
-            onClick={(e) => {
-              if (!whatsappLink) e.preventDefault()
-            }}
-            className={`flex w-full items-center justify-center gap-2 rounded-md px-3.5 py-2.5 text-sm font-medium transition-colors sm:py-2 ${
-              whatsappLink
-                ? 'bg-emerald-600 text-white hover:bg-emerald-700 cursor-pointer'
-                : 'cursor-not-allowed bg-slate-100 text-slate-400'
-            }`}
-          >
-            📲 Enviar recordatorio por WhatsApp
-          </a>
-          {!whatsappLink && (
-            <p className="mt-2 text-xs text-slate-400">
-              Este paciente no tiene un teléfono registrado.
+          <div className="flex items-center justify-between">
+            <span className="font-semibold text-slate-500">Paciente</span>
+            <span className="font-bold text-slate-900 capitalize">{appointment.patients?.full_name || 'N/A'}</span>
+          </div>
+
+          {appointment.patients?.phone && (
+            <div className="flex items-center justify-between">
+              <span className="font-semibold text-slate-500">Teléfono</span>
+              <span className="font-mono text-slate-800">{appointment.patients.phone}</span>
+            </div>
+          )}
+
+          {appointment.patients?.email && (
+            <div className="flex items-center justify-between">
+              <span className="font-semibold text-slate-500">Correo</span>
+              <span className="text-slate-800">{appointment.patients.email}</span>
+            </div>
+          )}
+
+          {appointment.servicio && (
+            <div className="flex items-center justify-between">
+              <span className="font-semibold text-slate-500">Servicio</span>
+              <span className="font-bold text-slate-800 capitalize">{appointment.servicio}</span>
+            </div>
+          )}
+
+          <div className="flex items-center justify-between">
+            <span className="font-semibold text-slate-500">Modalidad</span>
+            <span className="font-bold text-slate-800 capitalize">{modalidadLabel}</span>
+          </div>
+
+          {esDomicilio && comunaNombre && (
+            <div className="flex items-center justify-between">
+              <span className="font-semibold text-slate-500">Comuna</span>
+              <span className="font-bold text-sky-800 capitalize">📍 {comunaNombre}</span>
+            </div>
+          )}
+
+          {esDomicilio && direccionExacta && (
+            <div className="flex items-center justify-between">
+              <span className="font-semibold text-slate-500">Dirección</span>
+              <span className="font-bold text-slate-900">🏠 {direccionExacta}</span>
+            </div>
+          )}
+
+          <div className="flex items-center justify-between">
+            <span className="font-semibold text-slate-500">Fecha</span>
+            <span className="capitalize text-slate-800">{formatFechaLong(appointment.start_time)}</span>
+          </div>
+
+          <div className="flex items-center justify-between">
+            <span className="font-semibold text-slate-500">Horario</span>
+            <span className="font-mono font-bold text-slate-800">
+              {formatHora(appointment.start_time)} — {formatHora(appointment.end_time)}
+            </span>
+          </div>
+
+          {appointment.notas && (
+            <div className="rounded-xl border border-slate-100 bg-slate-50 p-3">
+              <span className="block mb-1 text-[11px] font-bold uppercase text-slate-400">Detalles / Notas:</span>
+              <p className="text-slate-700">{appointment.notas}</p>
+            </div>
+          )}
+
+          <div className="space-y-2 pt-2">
+            <button
+              onClick={handleWspClick}
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 py-2.5 font-bold text-white shadow-sm transition hover:bg-emerald-700 cursor-pointer"
+            >
+              📲 Enviar recordatorio por WhatsApp
+            </button>
+            <p className="text-[11px] text-slate-400 text-center">
+              ℹ️ Si quieres enviar recordatorios por WSP desde computador, tienes que tener WhatsApp Web abierto.
             </p>
-          )}
-          <p className="mt-2 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-700">
-            ℹ️ Si quieres enviar recordatorios por WSP desde computador, tienes que tener WhatsApp Web abierto.
-          </p>
+          </div>
         </div>
 
-        <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
-          {onCancelAppointment && !isCancelled && (
-            <button
-              onClick={() => onCancelAppointment(appointment)}
-              className="rounded-md border border-red-200 bg-red-50 px-3.5 py-2.5 text-sm font-medium text-red-600 transition-colors hover:bg-red-100 cursor-pointer sm:py-2"
-            >
-              Cancelar Cita
-            </button>
-          )}
-          {onEdit && (
-            <button
-              onClick={() => onEdit(appointment)}
-              className="rounded-md border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-100 cursor-pointer sm:py-2"
-            >
-              Editar
-            </button>
-          )}
+        <div className="mt-5 flex items-center justify-end gap-2 border-t border-slate-100 pt-3">
+          <button
+            onClick={() => onCancelAppointment(appointment)}
+            className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold text-red-600 transition hover:bg-red-100 cursor-pointer"
+          >
+            Cancelar Cita
+          </button>
+          <button
+            onClick={() => onEdit(appointment)}
+            className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-bold text-slate-700 transition hover:bg-slate-100 cursor-pointer"
+          >
+            Editar
+          </button>
           <button
             onClick={onClose}
-            className="rounded-md bg-sky-600 px-3.5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-sky-700 cursor-pointer sm:py-2"
+            className="rounded-xl bg-sky-600 px-4 py-2 text-xs font-bold text-white transition hover:bg-sky-700 cursor-pointer"
           >
             Cerrar
           </button>
         </div>
       </div>
     </div>
-  )
+  );
 }

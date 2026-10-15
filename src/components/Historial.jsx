@@ -1,33 +1,11 @@
 // src/components/Historial.jsx
-//
-// Historial Clínico Podológico = Ficha Clínica (patologías marcables +
-// tratamientos recomendados + control de evolución, fija por paciente)
-// + Registro cronológico (una entrada por sesión, tabla clinical_notes).
-//
-// La ficha clínica se guarda en:
-//   patients.conditions               -> patologías marcadas (checklist)
-//   patients.conditions_notes         -> "otras patologías" / detalle libre
-//   patients.treatment_recommendations-> tratamientos/medicamentos marcados
-//   patients.treatment_notes          -> indicaciones de tratamiento libres
-//   patients.progress_level           -> etapa general del caso
-//   patients.improvement_status       -> cómo va evolucionando
-//   patients.estimated_duration_weeks -> duración estimada del tratamiento
-//
-// El catálogo de patologías vive en src/lib/conditions.js y el de
-// tratamientos + opciones de evolución en src/lib/treatments.js.
-//
-// Si el profesional que ve esta pantalla es el dueño de una cuenta con
-// equipo, puede ver/editar la ficha de pacientes de sus profesionales
-// (permitido por las políticas RLS "owner_equipo_*" del SQL de
-// actualización), por eso todas las consultas usan `professionalId`,
-// que llega desde App.jsx y puede ser el propio usuario u otro
-// profesional de su misma cuenta.
 
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabase'
 import { CONDITION_GROUPS } from '../lib/conditions'
-import { TREATMENT_GROUPS, PROGRESS_LEVELS, IMPROVEMENT_STATUS, ESTIMATED_DURATIONS } from '../lib/treatments'
+import { TREATMENT_GROUPS, PROGRESS_LEVELS } from '../lib/treatments'
 import { imprimirFichaPaciente } from '../lib/pdfFicha'
+import InformePacienteModal from './InformePacienteModal'
 
 export default function Historial({ session, professionalId, initialPatientId, onPatientChange, profile }) {
   const activeProfessionalId = professionalId || session?.user?.id
@@ -41,20 +19,21 @@ export default function Historial({ session, professionalId, initialPatientId, o
   const [loadingNotes, setLoadingNotes] = useState(false)
   const [nuevaNota, setNuevaNota] = useState('')
   const [nuevaNotaTratamientos, setNuevaNotaTratamientos] = useState([])
+  const [nuevaNotaProgreso, setNuevaNotaProgreso] = useState('en_progreso')
   const [guardando, setGuardando] = useState(false)
   const [mensaje, setMensaje] = useState('')
 
-  // --- Ficha clínica: patologías, tratamientos y evolución ---
+  // --- Ficha clínica: patologías y tratamientos ---
   const [conditions, setConditions] = useState([])
   const [conditionsNotes, setConditionsNotes] = useState('')
   const [treatments, setTreatments] = useState([])
   const [treatmentNotes, setTreatmentNotes] = useState('')
-  const [progressLevel, setProgressLevel] = useState('inicial')
-  const [improvementStatus, setImprovementStatus] = useState('sin_evaluar')
-  const [estimatedDuration, setEstimatedDuration] = useState(4)
   const [savingFicha, setSavingFicha] = useState(false)
   const [fichaDirty, setFichaDirty] = useState(false)
   const [fichaMensaje, setFichaMensaje] = useState('')
+
+  // --- Modal de Informe para Paciente ---
+  const [showInformePacienteModal, setShowInformePacienteModal] = useState(false)
 
   useEffect(() => {
     if (activeProfessionalId) fetchPatients()
@@ -77,7 +56,7 @@ export default function Historial({ session, professionalId, initialPatientId, o
     const { data, error } = await supabase
       .from('patients')
       .select(
-        'id, full_name, rut, phone, email, medical_history, allergies, conditions, conditions_notes, treatment_recommendations, treatment_notes, progress_level, improvement_status, estimated_duration_weeks'
+        'id, full_name, rut, phone, email, medical_history, allergies, conditions, conditions_notes, treatment_recommendations, treatment_notes'
       )
       .eq('professional_id', activeProfessionalId)
       .order('full_name', { ascending: true })
@@ -109,19 +88,13 @@ export default function Historial({ session, professionalId, initialPatientId, o
     setMensaje('')
     setFichaMensaje('')
     setNuevaNotaTratamientos([])
+    setNuevaNotaProgreso('en_progreso')
 
     const paciente = patients.find((p) => p.id === id)
     setConditions(Array.isArray(paciente?.conditions) ? paciente.conditions : [])
     setConditionsNotes(paciente?.conditions_notes || '')
     setTreatments(Array.isArray(paciente?.treatment_recommendations) ? paciente.treatment_recommendations : [])
     setTreatmentNotes(paciente?.treatment_notes || '')
-    setProgressLevel(paciente?.progress_level || 'inicial')
-    setImprovementStatus(paciente?.improvement_status || 'sin_evaluar')
-    setEstimatedDuration(
-      paciente?.estimated_duration_weeks === null || paciente?.estimated_duration_weeks === undefined
-        ? 4
-        : paciente.estimated_duration_weeks
-    )
     setFichaDirty(false)
   }
 
@@ -151,16 +124,13 @@ export default function Historial({ session, professionalId, initialPatientId, o
         conditions_notes: conditionsNotes.trim() || null,
         treatment_recommendations: treatments,
         treatment_notes: treatmentNotes.trim() || null,
-        progress_level: progressLevel,
-        improvement_status: improvementStatus,
-        estimated_duration_weeks: estimatedDuration,
       })
       .eq('id', selectedPatientId)
 
     if (error) {
       setFichaMensaje('Error al guardar la ficha: ' + error.message)
     } else {
-      setFichaMensaje('Ficha clínica actualizada.')
+      setFichaMensaje('¡Ficha clínica actualizada con éxito!')
       setFichaDirty(false)
       setPatients((prev) =>
         prev.map((p) =>
@@ -171,14 +141,11 @@ export default function Historial({ session, professionalId, initialPatientId, o
                 conditions_notes: conditionsNotes,
                 treatment_recommendations: treatments,
                 treatment_notes: treatmentNotes,
-                progress_level: progressLevel,
-                improvement_status: improvementStatus,
-                estimated_duration_weeks: estimatedDuration,
               }
             : p
         )
       )
-      setTimeout(() => setFichaMensaje(''), 2200)
+      setTimeout(() => setFichaMensaje(''), 2500)
     }
     setSavingFicha(false)
   }
@@ -195,8 +162,7 @@ export default function Historial({ session, professionalId, initialPatientId, o
       professional_id: activeProfessionalId,
       notes: nuevaNota.trim(),
       treatments_applied: nuevaNotaTratamientos,
-      progress_level: progressLevel,
-      improvement_status: improvementStatus,
+      progress_level: nuevaNotaProgreso,
     }])
 
     if (error) {
@@ -204,6 +170,7 @@ export default function Historial({ session, professionalId, initialPatientId, o
     } else {
       setNuevaNota('')
       setNuevaNotaTratamientos([])
+      setNuevaNotaProgreso('en_progreso')
       fetchNotes(selectedPatientId)
     }
     setGuardando(false)
@@ -238,46 +205,51 @@ export default function Historial({ session, professionalId, initialPatientId, o
   const treatmentLabel = (key) =>
     TREATMENT_GROUPS.flatMap((g) => g.items).find((t) => t.key === key)?.label || key
 
+  const progressLabel = (val) =>
+    PROGRESS_LEVELS.find((p) => p.value === val)?.label || val
+
   return (
     <div className="animate-fade-in-up space-y-6">
       <div className="border-b border-slate-200 pb-5">
-        <h3 className="text-lg font-semibold text-slate-800">Historial Clínico Podológico</h3>
-        <p className="text-sm text-slate-500">Ficha clínica, tratamientos, evolución y registro cronológico por paciente.</p>
+        <h3 className="text-lg font-bold text-slate-800">Historial Clínico Podológico</h3>
+        <p className="text-sm text-slate-500">Ficha clínica, recomendaciones y registro cronológico de sesiones.</p>
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Selector de pacientes */}
-        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-xs lg:col-span-1">
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs lg:col-span-1">
           <input
             type="text"
             value={busqueda}
             onChange={(e) => setBusqueda(e.target.value)}
-            placeholder="Buscar paciente..."
-            className="mb-3 w-full rounded-md border border-slate-300 bg-slate-50 px-3 py-2 text-sm outline-none transition-colors focus:border-sky-600 focus:bg-white"
+            placeholder="Buscar paciente por nombre o RUN..."
+            className="mb-3 w-full rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2.5 text-xs font-semibold text-slate-800 outline-none transition-all focus:border-sky-600 focus:bg-white"
           />
 
           {loadingPatients ? (
             <div className="space-y-2 py-2">
-              <div className="skeleton h-9 w-full" />
-              <div className="skeleton h-9 w-full" />
-              <div className="skeleton h-9 w-full" />
+              <div className="skeleton h-10 w-full rounded-xl" />
+              <div className="skeleton h-10 w-full rounded-xl" />
+              <div className="skeleton h-10 w-full rounded-xl" />
             </div>
           ) : pacientesFiltrados.length === 0 ? (
-            <p className="py-6 text-center text-sm text-slate-500">No hay pacientes que coincidan.</p>
+            <p className="py-6 text-center text-xs text-slate-500">No hay pacientes que coincidan.</p>
           ) : (
-            <div className="max-h-[420px] space-y-1 overflow-y-auto">
+            <div className="max-h-[460px] space-y-1.5 overflow-y-auto pr-1">
               {pacientesFiltrados.map((p) => (
                 <button
                   key={p.id}
                   onClick={() => handleSelectPatient(p.id)}
-                  className={`w-full rounded-md px-3 py-2.5 text-left text-sm transition-colors cursor-pointer ${
-                    selectedPatientId === p.id ? 'bg-sky-50 font-medium text-sky-700' : 'text-slate-700 hover:bg-slate-50'
+                  className={`w-full rounded-xl px-3.5 py-3 text-left text-xs transition-all cursor-pointer flex items-center justify-between ${
+                    selectedPatientId === p.id 
+                      ? 'bg-sky-50 font-bold text-sky-800 border border-sky-200 shadow-2xs' 
+                      : 'text-slate-700 hover:bg-slate-50 border border-transparent font-medium'
                   }`}
                 >
-                  {p.full_name}
+                  <span className="truncate">{p.full_name}</span>
                   {Array.isArray(p.conditions) && p.conditions.length > 0 && (
-                    <span className="ml-2 inline-block rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
-                      {p.conditions.length}
+                    <span className="shrink-0 rounded-full bg-slate-200/80 px-2 py-0.5 text-[10px] font-bold text-slate-700">
+                      {p.conditions.length} pat.
                     </span>
                   )}
                 </button>
@@ -286,192 +258,203 @@ export default function Historial({ session, professionalId, initialPatientId, o
           )}
         </div>
 
-        {/* Historial del paciente seleccionado */}
+        {/* Ficha e Historial del paciente seleccionado */}
         <div className="lg:col-span-2">
           {!pacienteActivo ? (
-            <div className="flex h-full min-h-[300px] items-center justify-center rounded-xl border border-dashed border-slate-200 bg-white p-8 text-center">
-              <p className="text-sm text-slate-500">Selecciona un paciente a la izquierda para ver o editar su ficha clínica.</p>
+            <div className="flex h-full min-h-[350px] items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center shadow-2xs">
+              <p className="text-xs font-semibold text-slate-500">Selecciona un paciente a la izquierda para ver o editar su ficha clínica.</p>
             </div>
           ) : (
-            <div key={selectedPatientId} className="animate-fade-in space-y-4">
-              <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-xs">
+            <div key={selectedPatientId} className="animate-fade-in space-y-5">
+              {/* Tarjeta de Información del Paciente */}
+              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs space-y-3">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
-                    <h4 className="text-base font-semibold text-slate-900">{pacienteActivo.full_name}</h4>
-                    <div className="mt-2 flex flex-wrap gap-x-6 gap-y-1 text-xs text-slate-500">
+                    <h4 className="text-base font-extrabold text-slate-900">{pacienteActivo.full_name}</h4>
+                    <div className="mt-1 flex flex-wrap gap-x-5 gap-y-1 text-xs font-medium text-slate-500">
                       {pacienteActivo.rut && <span>RUN: {pacienteActivo.rut}</span>}
                       {pacienteActivo.phone && <span>Tel: {pacienteActivo.phone}</span>}
                       {pacienteActivo.email && <span>{pacienteActivo.email}</span>}
                     </div>
                   </div>
-                  <div className="flex shrink-0 items-center gap-2">
-                    <span className="rounded-full bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700">
-                      {totalSesiones} sesión{totalSesiones !== 1 ? 'es' : ''} registrada{totalSesiones !== 1 ? 's' : ''}
+                  <div className="flex shrink-0 items-center gap-2 flex-wrap">
+                    <span className="rounded-full bg-sky-100 px-3 py-1 text-xs font-bold text-sky-800">
+                      {totalSesiones} sesión{totalSesiones !== 1 ? 'es' : ''}
                     </span>
                     <button
                       onClick={() => imprimirFichaPaciente(pacienteActivo, notes, profile)}
-                      className="rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-50 cursor-pointer"
+                      className="rounded-xl border border-slate-200 bg-white px-3.5 py-1.5 text-xs font-bold text-slate-700 transition hover:bg-slate-50 cursor-pointer shadow-2xs"
                     >
-                      🖨️ Descargar Ficha (PDF)
+                      🖨️ Ficha Interna (PDF)
+                    </button>
+                    <button
+                      onClick={() => setShowInformePacienteModal(true)}
+                      className="rounded-xl bg-sky-600 px-3.5 py-1.5 text-xs font-bold text-white transition hover:bg-sky-700 cursor-pointer shadow-2xs"
+                    >
+                      📋 Informe para Paciente
                     </button>
                   </div>
                 </div>
-                {pacienteActivo.allergies && (
-                  <p className="mt-2 rounded-md bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-700">
-                    ⚠ Alergias: {pacienteActivo.allergies}
-                  </p>
-                )}
-                {pacienteActivo.medical_history && (
-                  <p className="mt-2 text-xs text-slate-500">
-                    <strong className="text-slate-600">Antecedentes:</strong> {pacienteActivo.medical_history}
-                  </p>
+
+                {(pacienteActivo.allergies || pacienteActivo.medical_history) && (
+                  <div className="grid grid-cols-1 gap-2 pt-2 border-t border-slate-100 text-xs">
+                    {pacienteActivo.allergies && (
+                      <p className="rounded-xl bg-amber-50 border border-amber-200 px-3 py-2 font-medium text-amber-900">
+                        <strong>⚠️ Alergias:</strong> {pacienteActivo.allergies}
+                      </p>
+                    )}
+                    {pacienteActivo.medical_history && (
+                      <p className="rounded-xl bg-slate-50 border border-slate-200/80 px-3 py-2 text-slate-700">
+                        <strong>Antecedentes médicos:</strong> {pacienteActivo.medical_history}
+                      </p>
+                    )}
+                  </div>
                 )}
               </div>
 
-              {/* Ficha clínica: patologías marcables */}
-              <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-xs">
-                <div className="mb-3 flex items-center justify-between gap-3">
-                  <h5 className="text-sm font-semibold text-slate-700">Ficha clínica — patologías podológicas</h5>
+              {/* FICHA CLÍNICA — PATOLOGÍAS PODOLÓGICAS */}
+              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                  <div>
+                    <h5 className="text-sm font-extrabold text-slate-800">Ficha clínica — Patologías podológicas</h5>
+                    <p className="text-xs text-slate-400">Condiciones de base del paciente.</p>
+                  </div>
                   {fichaDirty && (
                     <button
                       onClick={handleGuardarFicha}
                       disabled={savingFicha}
-                      className="rounded-md bg-sky-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-sky-700 disabled:opacity-60 cursor-pointer"
+                      className="rounded-xl bg-sky-600 px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-sky-700 disabled:opacity-60 cursor-pointer animate-pulse"
                     >
-                      {savingFicha ? 'Guardando...' : 'Guardar ficha'}
+                      {savingFicha ? 'Guardando...' : '💾 Guardar Ficha'}
                     </button>
                   )}
                 </div>
 
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   {CONDITION_GROUPS.map((group) => (
-                    <div key={group.group}>
-                      <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400">{group.group}</p>
-                      <div className="space-y-1.5">
-                        {group.items.map((item) => (
-                          <label key={item.key} className="flex cursor-pointer items-center gap-2.5 text-sm text-slate-700">
-                            <input
-                              type="checkbox"
-                              checked={conditions.includes(item.key)}
-                              onChange={() => toggleCondition(item.key)}
-                              className="h-4 w-4 shrink-0 accent-sky-600"
-                            />
-                            {item.label}
-                          </label>
-                        ))}
+                    <div key={group.group} className="rounded-xl border border-slate-200/80 bg-slate-50/60 p-3.5">
+                      <p className="mb-2 text-xs font-extrabold uppercase tracking-wide text-sky-900">{group.group}</p>
+                      <div className="space-y-2">
+                        {group.items.map((item) => {
+                          const isChecked = conditions.includes(item.key)
+                          return (
+                            <label
+                              key={item.key}
+                              className={`flex cursor-pointer items-center gap-2.5 rounded-lg p-2 text-xs font-medium transition-all ${
+                                isChecked
+                                  ? 'bg-sky-100/70 border border-sky-300 text-sky-950 font-bold shadow-2xs'
+                                  : 'bg-white border border-slate-200/80 text-slate-700 hover:bg-slate-100/50'
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={isChecked}
+                                onChange={() => toggleCondition(item.key)}
+                                className="h-4 w-4 shrink-0 accent-sky-600 rounded-md cursor-pointer"
+                              />
+                              <span className="flex-1">{item.label}</span>
+                            </label>
+                          )
+                        })}
                       </div>
                     </div>
                   ))}
                 </div>
 
-                <div className="mt-4">
-                  <label className="mb-1.5 block text-xs font-medium text-slate-700">Otras patologías / detalle</label>
+                <div>
+                  <label className="mb-1.5 block text-xs font-bold text-slate-700">Otras patologías / observaciones detalladas</label>
                   <textarea
                     value={conditionsNotes}
                     onChange={(e) => { setConditionsNotes(e.target.value); setFichaDirty(true) }}
                     rows="2"
                     placeholder="Ej. Antecedente de cirugía en dedo gordo pie derecho (2022)..."
-                    className="w-full rounded-md border border-slate-300 bg-slate-50 px-3 py-2 text-sm outline-none transition-colors focus:border-sky-600 focus:bg-white"
+                    className="w-full rounded-xl border border-slate-300 bg-slate-50 p-3 text-xs font-semibold text-slate-800 outline-none transition focus:border-sky-600 focus:bg-white"
                   />
                 </div>
               </div>
 
               {/* Tratamientos / medicamentos recomendados */}
-              <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-xs">
-                <h5 className="mb-3 text-sm font-semibold text-slate-700">Recomendaciones de tratamiento / medicamentos tópicos</h5>
+              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs space-y-4">
+                <h5 className="text-sm font-extrabold text-slate-800">Recomendaciones de tratamiento / medicamentos tópicos</h5>
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   {TREATMENT_GROUPS.map((group) => (
-                    <div key={group.group}>
-                      <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400">{group.group}</p>
-                      <div className="space-y-1.5">
-                        {group.items.map((item) => (
-                          <label key={item.key} className="flex cursor-pointer items-center gap-2.5 text-sm text-slate-700">
-                            <input
-                              type="checkbox"
-                              checked={treatments.includes(item.key)}
-                              onChange={() => toggleTreatment(item.key)}
-                              className="h-4 w-4 shrink-0 accent-emerald-600"
-                            />
-                            {item.label}
-                          </label>
-                        ))}
+                    <div key={group.group} className="rounded-xl border border-slate-200/80 bg-slate-50/60 p-3.5">
+                      <p className="mb-2 text-xs font-extrabold uppercase tracking-wide text-emerald-900">{group.group}</p>
+                      <div className="space-y-2">
+                        {group.items.map((item) => {
+                          const isChecked = treatments.includes(item.key)
+                          return (
+                            <label
+                              key={item.key}
+                              className={`flex cursor-pointer items-center gap-2.5 rounded-lg p-2 text-xs font-medium transition-all ${
+                                isChecked
+                                  ? 'bg-emerald-100/70 border border-emerald-300 text-emerald-950 font-bold shadow-2xs'
+                                  : 'bg-white border border-slate-200/80 text-slate-700 hover:bg-slate-100/50'
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={isChecked}
+                                onChange={() => toggleTreatment(item.key)}
+                                className="h-4 w-4 shrink-0 accent-emerald-600 rounded-md cursor-pointer"
+                              />
+                              <span className="flex-1">{item.label}</span>
+                            </label>
+                          )
+                        })}
                       </div>
                     </div>
                   ))}
                 </div>
-                <div className="mt-4">
-                  <label className="mb-1.5 block text-xs font-medium text-slate-700">Indicaciones de tratamiento (posología, frecuencia, etc.)</label>
+                <div>
+                  <label className="mb-1.5 block text-xs font-bold text-slate-700">Indicaciones de tratamiento (posología, frecuencia, etc.)</label>
                   <textarea
                     value={treatmentNotes}
                     onChange={(e) => { setTreatmentNotes(e.target.value); setFichaDirty(true) }}
                     rows="2"
                     placeholder="Ej. Aplicar crema con urea 30% en talones cada noche por 3 semanas..."
-                    className="w-full rounded-md border border-slate-300 bg-slate-50 px-3 py-2 text-sm outline-none transition-colors focus:border-sky-600 focus:bg-white"
+                    className="w-full rounded-xl border border-slate-300 bg-slate-50 p-3 text-xs font-semibold text-slate-800 outline-none transition focus:border-sky-600 focus:bg-white"
                   />
                 </div>
               </div>
 
-              {/* Control de evolución */}
-              <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-xs">
-                <h5 className="mb-3 text-sm font-semibold text-slate-700">Control de evolución</h5>
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              {/* REGISTRO CRONOLÓGICO POTENCIADO */}
+              <form onSubmit={handleAddNote} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-3 flex-wrap gap-2">
                   <div>
-                    <label className="mb-1.5 block text-xs font-medium text-slate-700">Etapa del caso</label>
-                    <select
-                      value={progressLevel}
-                      onChange={(e) => { setProgressLevel(e.target.value); setFichaDirty(true) }}
-                      className="w-full rounded-md border border-slate-300 bg-slate-50 px-3 py-2 text-sm outline-none focus:border-sky-600 focus:bg-white"
-                    >
-                      {PROGRESS_LEVELS.map((o) => (<option key={o.value} value={o.value}>{o.label}</option>))}
-                    </select>
+                    <h5 className="text-sm font-extrabold text-slate-800">Nueva entrada de sesión</h5>
+                    <p className="text-xs text-slate-400">Registra el procedimiento, evolución y estado de la visita actual.</p>
                   </div>
-                  <div>
-                    <label className="mb-1.5 block text-xs font-medium text-slate-700">Estado de mejora clínica</label>
+                  <div className="w-44">
                     <select
-                      value={improvementStatus}
-                      onChange={(e) => { setImprovementStatus(e.target.value); setFichaDirty(true) }}
-                      className="w-full rounded-md border border-slate-300 bg-slate-50 px-3 py-2 text-sm outline-none focus:border-sky-600 focus:bg-white"
+                      value={nuevaNotaProgreso}
+                      onChange={(e) => setNuevaNotaProgreso(e.target.value)}
+                      className="w-full rounded-xl border border-slate-300 bg-slate-50 p-2 text-xs font-bold text-slate-700 outline-none focus:border-sky-600 cursor-pointer"
                     >
-                      {IMPROVEMENT_STATUS.map((o) => (<option key={o.value} value={o.value}>{o.label}</option>))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="mb-1.5 block text-xs font-medium text-slate-700">Duración estimada del tratamiento</label>
-                    <select
-                      value={estimatedDuration}
-                      onChange={(e) => { setEstimatedDuration(Number(e.target.value)); setFichaDirty(true) }}
-                      className="w-full rounded-md border border-slate-300 bg-slate-50 px-3 py-2 text-sm outline-none focus:border-sky-600 focus:bg-white"
-                    >
-                      {ESTIMATED_DURATIONS.map((o) => (<option key={o.value} value={o.value}>{o.label}</option>))}
+                      {PROGRESS_LEVELS.map((o) => (
+                        <option key={o.value} value={o.value}>Estado: {o.label}</option>
+                      ))}
                     </select>
                   </div>
                 </div>
-                <p className="mt-3 text-xs text-slate-500">
-                  Sesiones realizadas hasta hoy: <strong className="text-slate-700">{totalSesiones}</strong>
-                </p>
-                {fichaMensaje && <p className="mt-3 animate-fade-in text-xs font-medium text-emerald-600">{fichaMensaje}</p>}
-              </div>
 
-              {/* Nueva entrada del registro cronológico */}
-              <form onSubmit={handleAddNote} className="rounded-xl border border-slate-200 bg-white p-5 shadow-xs">
-                <label className="mb-1.5 block text-xs font-medium text-slate-700">Nueva entrada de la sesión</label>
                 <textarea
                   value={nuevaNota}
                   onChange={(e) => setNuevaNota(e.target.value)}
                   rows="3"
-                  placeholder="Ej: Consulta de control, se observa mejoría en..."
-                  className="w-full rounded-md border border-slate-300 bg-slate-50 px-3 py-2 text-sm outline-none transition-colors focus:border-sky-600 focus:bg-white"
+                  placeholder="Ej: Se realiza asepsia, antisepsia y deslaminación de hiperqueratosis plantar..."
+                  className="w-full rounded-xl border border-slate-300 bg-slate-50 p-3 text-xs font-semibold text-slate-800 outline-none transition focus:border-sky-600 focus:bg-white"
                 />
 
-                <div className="mt-3">
-                  <p className="mb-1.5 text-xs font-medium text-slate-700">Tratamientos aplicados en esta sesión (opcional)</p>
+                <div>
+                  <p className="mb-2 text-xs font-bold text-slate-700">Tratamientos aplicados en esta sesión</p>
                   <div className="flex flex-wrap gap-2">
                     {TREATMENT_GROUPS.flatMap((g) => g.items).map((item) => (
                       <label
                         key={item.key}
-                        className={`cursor-pointer rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                        className={`cursor-pointer rounded-xl border px-3 py-1.5 text-xs font-semibold transition-all ${
                           nuevaNotaTratamientos.includes(item.key)
-                            ? 'border-emerald-300 bg-emerald-50 text-emerald-700'
+                            ? 'border-emerald-300 bg-emerald-100 text-emerald-900 shadow-2xs'
                             : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100'
                         }`}
                       >
@@ -487,50 +470,57 @@ export default function Historial({ session, professionalId, initialPatientId, o
                   </div>
                 </div>
 
-                <div className="mt-3 flex items-center justify-between gap-3">
-                  {mensaje && <p className="text-xs text-red-600">{mensaje}</p>}
+                <div className="flex items-center justify-between gap-3 pt-2">
+                  {mensaje && <p className="text-xs text-red-600 font-semibold">{mensaje}</p>}
                   <button
                     type="submit"
                     disabled={guardando || !nuevaNota.trim()}
-                    className="ml-auto rounded-md bg-sky-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-sky-700 disabled:opacity-50 cursor-pointer"
+                    className="ml-auto rounded-xl bg-sky-600 px-5 py-2.5 text-xs font-bold text-white shadow-sm transition hover:bg-sky-700 disabled:opacity-50 cursor-pointer"
                   >
-                    {guardando ? 'Guardando...' : 'Guardar entrada'}
+                    {guardando ? 'Guardando...' : '+ Guardar Entrada de Sesión'}
                   </button>
                 </div>
               </form>
 
-              {/* Línea de tiempo */}
-              <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-xs">
-                <h5 className="mb-3 text-sm font-semibold text-slate-700">Registro cronológico</h5>
+              {/* Línea de tiempo del Registro Cronológico */}
+              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs space-y-4">
+                <h5 className="text-sm font-extrabold text-slate-800">Historial cronológico de atenciones</h5>
                 {loadingNotes ? (
                   <div className="space-y-2">
-                    <div className="skeleton h-14 w-full" />
-                    <div className="skeleton h-14 w-full" />
+                    <div className="skeleton h-16 w-full rounded-xl" />
+                    <div className="skeleton h-16 w-full rounded-xl" />
                   </div>
                 ) : notes.length === 0 ? (
-                  <div className="rounded-lg border border-dashed border-slate-200 p-6 text-center">
-                    <p className="text-sm text-slate-500">Todavía no hay entradas registradas para este paciente.</p>
+                  <div className="rounded-xl border border-dashed border-slate-300 p-6 text-center">
+                    <p className="text-xs font-medium text-slate-500">Todavía no hay entradas registradas para este paciente.</p>
                   </div>
                 ) : (
                   <ul className="space-y-3">
                     {notes.map((n) => (
-                      <li key={n.id} className="animate-fade-in rounded-lg border border-slate-100 bg-slate-50 p-3.5">
-                        <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
-                          <span className="text-xs font-medium text-slate-500">
-                            {n.session_number ? `Sesión #${n.session_number} · ` : ''}{formatFecha(n.created_at)}
-                          </span>
+                      <li key={n.id} className="animate-fade-in rounded-xl border border-slate-200/80 bg-slate-50/70 p-4 space-y-2.5">
+                        <div className="flex items-center justify-between flex-wrap gap-2">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-extrabold text-sky-900">
+                              {n.session_number ? `Sesión #${n.session_number} · ` : ''}{formatFecha(n.created_at)}
+                            </span>
+                            {n.progress_level && (
+                              <span className="rounded-lg bg-sky-100 px-2 py-0.5 text-[10px] font-bold text-sky-800">
+                                {progressLabel(n.progress_level)}
+                              </span>
+                            )}
+                          </div>
                           <button
                             onClick={() => handleDeleteNote(n.id)}
-                            className="text-xs text-red-500 transition-colors hover:text-red-700 cursor-pointer"
+                            className="text-xs font-bold text-red-500 hover:text-red-700 cursor-pointer"
                           >
                             Eliminar
                           </button>
                         </div>
-                        <p className="whitespace-pre-wrap text-sm text-slate-800">{n.notes}</p>
+                        <p className="whitespace-pre-wrap text-xs text-slate-800 leading-relaxed">{n.notes}</p>
                         {Array.isArray(n.treatments_applied) && n.treatments_applied.length > 0 && (
-                          <div className="mt-2 flex flex-wrap gap-1.5">
+                          <div className="flex flex-wrap gap-1.5 pt-1">
                             {n.treatments_applied.map((key) => (
-                              <span key={key} className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
+                              <span key={key} className="rounded-lg bg-emerald-100 border border-emerald-200 px-2.5 py-0.5 text-[11px] font-bold text-emerald-800">
                                 {treatmentLabel(key)}
                               </span>
                             ))}
@@ -545,6 +535,15 @@ export default function Historial({ session, professionalId, initialPatientId, o
           )}
         </div>
       </div>
+
+      {/* Modal de Informe para el Paciente */}
+      {showInformePacienteModal && pacienteActivo && (
+        <InformePacienteModal
+          paciente={pacienteActivo}
+          profile={profile}
+          onClose={() => setShowInformePacienteModal(false)}
+        />
+      )}
     </div>
   )
 }
