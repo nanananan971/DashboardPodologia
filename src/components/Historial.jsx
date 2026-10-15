@@ -209,20 +209,20 @@ export default function Historial({ session, professionalId, initialPatientId, o
     PROGRESS_LEVELS.find((p) => p.value === val)?.label || val
 
   return (
-    <div className="animate-fade-in-up space-y-6">
-      <div className="border-b border-slate-200 pb-5">
-        <h3 className="text-lg font-bold text-slate-800">Historial Clínico Podológico</h3>
-        <p className="text-sm text-slate-500">Ficha clínica, recomendaciones y registro cronológico de sesiones.</p>
+    <div className="animate-fade-in-up space-y-4 sm:space-y-6">
+      <div className="border-b border-slate-200 pb-3 sm:pb-5">
+        <h3 className="text-base sm:text-lg font-bold text-slate-800">Historial Clínico Podológico</h3>
+        <p className="text-xs sm:text-sm text-slate-500">Ficha clínica, recomendaciones y registro cronológico de sesiones.</p>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 lg:gap-6">
         {/* Selector de pacientes */}
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs lg:col-span-1">
+        <div className="rounded-2xl border border-slate-200 bg-white p-3.5 sm:p-4 shadow-xs lg:col-span-1">
           <input
             type="text"
             value={busqueda}
             onChange={(e) => setBusqueda(e.target.value)}
-            placeholder="Buscar paciente por nombre o RUN..."
+            placeholder="Buscar por nombre o RUN..."
             className="mb-3 w-full rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2.5 text-xs font-semibold text-slate-800 outline-none transition-all focus:border-sky-600 focus:bg-white"
           />
 
@@ -230,23 +230,22 @@ export default function Historial({ session, professionalId, initialPatientId, o
             <div className="space-y-2 py-2">
               <div className="skeleton h-10 w-full rounded-xl" />
               <div className="skeleton h-10 w-full rounded-xl" />
-              <div className="skeleton h-10 w-full rounded-xl" />
             </div>
           ) : pacientesFiltrados.length === 0 ? (
             <p className="py-6 text-center text-xs text-slate-500">No hay pacientes que coincidan.</p>
           ) : (
-            <div className="max-h-[460px] space-y-1.5 overflow-y-auto pr-1">
+            <div className="max-h-[220px] sm:max-h-[460px] space-y-1.5 overflow-y-auto pr-1">
               {pacientesFiltrados.map((p) => (
                 <button
                   key={p.id}
                   onClick={() => handleSelectPatient(p.id)}
-                  className={`w-full rounded-xl px-3.5 py-3 text-left text-xs transition-all cursor-pointer flex items-center justify-between ${
+                  className={`w-full rounded-xl px-3 py-2.5 sm:px-3.5 sm:py-3 text-left text-xs transition-all cursor-pointer flex items-center justify-between ${
                     selectedPatientId === p.id 
                       ? 'bg-sky-50 font-bold text-sky-800 border border-sky-200 shadow-2xs' 
                       : 'text-slate-700 hover:bg-slate-50 border border-transparent font-medium'
                   }`}
                 >
-                  <span className="truncate">{p.full_name}</span>
+                  <span className="truncate pr-2">{p.full_name}</span>
                   {Array.isArray(p.conditions) && p.conditions.length > 0 && (
                     <span className="shrink-0 rounded-full bg-slate-200/80 px-2 py-0.5 text-[10px] font-bold text-slate-700">
                       {p.conditions.length} pat.
@@ -259,39 +258,40 @@ export default function Historial({ session, professionalId, initialPatientId, o
         </div>
 
         {/* Ficha e Historial del paciente seleccionado */}
-        <div className="lg:col-span-2">
+        <div className="lg:col-span-2 space-y-4 sm:space-y-5">
           {!pacienteActivo ? (
-            <div className="flex h-full min-h-[350px] items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center shadow-2xs">
-              <p className="text-xs font-semibold text-slate-500">Selecciona un paciente a la izquierda para ver o editar su ficha clínica.</p>
+            <div className="flex h-full min-h-[200px] sm:min-h-[350px] items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-white p-6 sm:p-8 text-center shadow-2xs">
+              <p className="text-xs font-semibold text-slate-500">Selecciona un paciente para ver o editar su ficha clínica.</p>
             </div>
           ) : (
-            <div key={selectedPatientId} className="animate-fade-in space-y-5">
+            <div key={selectedPatientId} className="animate-fade-in space-y-4 sm:space-y-5">
               {/* Tarjeta de Información del Paciente */}
-              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs space-y-3">
-                <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 shadow-xs space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
                   <div>
                     <h4 className="text-base font-extrabold text-slate-900">{pacienteActivo.full_name}</h4>
-                    <div className="mt-1 flex flex-wrap gap-x-5 gap-y-1 text-xs font-medium text-slate-500">
+                    <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs font-medium text-slate-500">
                       {pacienteActivo.rut && <span>RUN: {pacienteActivo.rut}</span>}
                       {pacienteActivo.phone && <span>Tel: {pacienteActivo.phone}</span>}
                       {pacienteActivo.email && <span>{pacienteActivo.email}</span>}
                     </div>
                   </div>
-                  <div className="flex shrink-0 items-center gap-2 flex-wrap">
+                  
+                  <div className="flex flex-wrap items-center gap-2 pt-1 sm:pt-0">
                     <span className="rounded-full bg-sky-100 px-3 py-1 text-xs font-bold text-sky-800">
                       {totalSesiones} sesión{totalSesiones !== 1 ? 'es' : ''}
                     </span>
                     <button
                       onClick={() => imprimirFichaPaciente(pacienteActivo, notes, profile)}
-                      className="rounded-xl border border-slate-200 bg-white px-3.5 py-1.5 text-xs font-bold text-slate-700 transition hover:bg-slate-50 cursor-pointer shadow-2xs"
+                      className="flex-1 sm:flex-none text-center rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 transition hover:bg-slate-50 cursor-pointer shadow-2xs"
                     >
-                      🖨️ Ficha Interna (PDF)
+                      🖨️ Ficha Interna
                     </button>
                     <button
                       onClick={() => setShowInformePacienteModal(true)}
-                      className="rounded-xl bg-sky-600 px-3.5 py-1.5 text-xs font-bold text-white transition hover:bg-sky-700 cursor-pointer shadow-2xs"
+                      className="flex-1 sm:flex-none text-center rounded-xl bg-sky-600 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-sky-700 cursor-pointer shadow-2xs"
                     >
-                      📋 Informe para Paciente
+                      📋 Informe Paciente
                     </button>
                   </div>
                 </div>
@@ -313,34 +313,34 @@ export default function Historial({ session, professionalId, initialPatientId, o
               </div>
 
               {/* FICHA CLÍNICA — PATOLOGÍAS PODOLÓGICAS */}
-              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs space-y-4">
-                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 shadow-xs space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
                   <div>
-                    <h5 className="text-sm font-extrabold text-slate-800">Ficha clínica — Patologías podológicas</h5>
-                    <p className="text-xs text-slate-400">Condiciones de base del paciente.</p>
+                    <h5 className="text-xs sm:text-sm font-extrabold text-slate-800">Ficha clínica — Patologías podológicas</h5>
+                    <p className="text-[11px] text-slate-400">Condiciones de base del paciente.</p>
                   </div>
                   {fichaDirty && (
                     <button
                       onClick={handleGuardarFicha}
                       disabled={savingFicha}
-                      className="rounded-xl bg-sky-600 px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-sky-700 disabled:opacity-60 cursor-pointer animate-pulse"
+                      className="w-full sm:w-auto rounded-xl bg-sky-600 px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-sky-700 disabled:opacity-60 cursor-pointer animate-pulse"
                     >
                       {savingFicha ? 'Guardando...' : '💾 Guardar Ficha'}
                     </button>
                   )}
                 </div>
 
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="grid grid-cols-1 gap-3 sm:gap-4 sm:grid-cols-2">
                   {CONDITION_GROUPS.map((group) => (
-                    <div key={group.group} className="rounded-xl border border-slate-200/80 bg-slate-50/60 p-3.5">
-                      <p className="mb-2 text-xs font-extrabold uppercase tracking-wide text-sky-900">{group.group}</p>
-                      <div className="space-y-2">
+                    <div key={group.group} className="rounded-xl border border-slate-200/80 bg-slate-50/60 p-3">
+                      <p className="mb-2 text-[11px] font-extrabold uppercase tracking-wide text-sky-900">{group.group}</p>
+                      <div className="space-y-1.5">
                         {group.items.map((item) => {
                           const isChecked = conditions.includes(item.key)
                           return (
                             <label
                               key={item.key}
-                              className={`flex cursor-pointer items-center gap-2.5 rounded-lg p-2 text-xs font-medium transition-all ${
+                              className={`flex cursor-pointer items-center gap-2 rounded-lg p-2 text-xs font-medium transition-all ${
                                 isChecked
                                   ? 'bg-sky-100/70 border border-sky-300 text-sky-950 font-bold shadow-2xs'
                                   : 'bg-white border border-slate-200/80 text-slate-700 hover:bg-slate-100/50'
@@ -352,7 +352,7 @@ export default function Historial({ session, professionalId, initialPatientId, o
                                 onChange={() => toggleCondition(item.key)}
                                 className="h-4 w-4 shrink-0 accent-sky-600 rounded-md cursor-pointer"
                               />
-                              <span className="flex-1">{item.label}</span>
+                              <span className="flex-1 leading-snug">{item.label}</span>
                             </label>
                           )
                         })}
@@ -362,31 +362,31 @@ export default function Historial({ session, professionalId, initialPatientId, o
                 </div>
 
                 <div>
-                  <label className="mb-1.5 block text-xs font-bold text-slate-700">Otras patologías / observaciones detalladas</label>
+                  <label className="mb-1 block text-xs font-bold text-slate-700">Otras patologías / observaciones detalladas</label>
                   <textarea
                     value={conditionsNotes}
                     onChange={(e) => { setConditionsNotes(e.target.value); setFichaDirty(true) }}
                     rows="2"
-                    placeholder="Ej. Antecedente de cirugía en dedo gordo pie derecho (2022)..."
-                    className="w-full rounded-xl border border-slate-300 bg-slate-50 p-3 text-xs font-semibold text-slate-800 outline-none transition focus:border-sky-600 focus:bg-white"
+                    placeholder="Ej. Antecedente de cirugía en dedo gordo pie derecho..."
+                    className="w-full rounded-xl border border-slate-300 bg-slate-50 p-2.5 sm:p-3 text-xs font-semibold text-slate-800 outline-none transition focus:border-sky-600 focus:bg-white"
                   />
                 </div>
               </div>
 
               {/* Tratamientos / medicamentos recomendados */}
-              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs space-y-4">
-                <h5 className="text-sm font-extrabold text-slate-800">Recomendaciones de tratamiento / medicamentos tópicos</h5>
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 shadow-xs space-y-4">
+                <h5 className="text-xs sm:text-sm font-extrabold text-slate-800">Recomendaciones de tratamiento / medicamentos tópicos</h5>
+                <div className="grid grid-cols-1 gap-3 sm:gap-4 sm:grid-cols-2">
                   {TREATMENT_GROUPS.map((group) => (
-                    <div key={group.group} className="rounded-xl border border-slate-200/80 bg-slate-50/60 p-3.5">
-                      <p className="mb-2 text-xs font-extrabold uppercase tracking-wide text-emerald-900">{group.group}</p>
-                      <div className="space-y-2">
+                    <div key={group.group} className="rounded-xl border border-slate-200/80 bg-slate-50/60 p-3">
+                      <p className="mb-2 text-[11px] font-extrabold uppercase tracking-wide text-emerald-900">{group.group}</p>
+                      <div className="space-y-1.5">
                         {group.items.map((item) => {
                           const isChecked = treatments.includes(item.key)
                           return (
                             <label
                               key={item.key}
-                              className={`flex cursor-pointer items-center gap-2.5 rounded-lg p-2 text-xs font-medium transition-all ${
+                              className={`flex cursor-pointer items-center gap-2 rounded-lg p-2 text-xs font-medium transition-all ${
                                 isChecked
                                   ? 'bg-emerald-100/70 border border-emerald-300 text-emerald-950 font-bold shadow-2xs'
                                   : 'bg-white border border-slate-200/80 text-slate-700 hover:bg-slate-100/50'
@@ -398,7 +398,7 @@ export default function Historial({ session, professionalId, initialPatientId, o
                                 onChange={() => toggleTreatment(item.key)}
                                 className="h-4 w-4 shrink-0 accent-emerald-600 rounded-md cursor-pointer"
                               />
-                              <span className="flex-1">{item.label}</span>
+                              <span className="flex-1 leading-snug">{item.label}</span>
                             </label>
                           )
                         })}
@@ -407,25 +407,25 @@ export default function Historial({ session, professionalId, initialPatientId, o
                   ))}
                 </div>
                 <div>
-                  <label className="mb-1.5 block text-xs font-bold text-slate-700">Indicaciones de tratamiento (posología, frecuencia, etc.)</label>
+                  <label className="mb-1 block text-xs font-bold text-slate-700">Indicaciones de tratamiento (posología, frecuencia, etc.)</label>
                   <textarea
                     value={treatmentNotes}
                     onChange={(e) => { setTreatmentNotes(e.target.value); setFichaDirty(true) }}
                     rows="2"
-                    placeholder="Ej. Aplicar crema con urea 30% en talones cada noche por 3 semanas..."
-                    className="w-full rounded-xl border border-slate-300 bg-slate-50 p-3 text-xs font-semibold text-slate-800 outline-none transition focus:border-sky-600 focus:bg-white"
+                    placeholder="Ej. Aplicar crema con urea 30% en talones cada noche..."
+                    className="w-full rounded-xl border border-slate-300 bg-slate-50 p-2.5 sm:p-3 text-xs font-semibold text-slate-800 outline-none transition focus:border-sky-600 focus:bg-white"
                   />
                 </div>
               </div>
 
-              {/* REGISTRO CRONOLÓGICO POTENCIADO */}
-              <form onSubmit={handleAddNote} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs space-y-4">
-                <div className="flex items-center justify-between border-b border-slate-100 pb-3 flex-wrap gap-2">
+              {/* REGISTRO CRONOLÓGICO */}
+              <form onSubmit={handleAddNote} className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 shadow-xs space-y-3.5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
                   <div>
-                    <h5 className="text-sm font-extrabold text-slate-800">Nueva entrada de sesión</h5>
-                    <p className="text-xs text-slate-400">Registra el procedimiento, evolución y estado de la visita actual.</p>
+                    <h5 className="text-xs sm:text-sm font-extrabold text-slate-800">Nueva entrada de sesión</h5>
+                    <p className="text-[11px] text-slate-400">Registra el procedimiento y evolución actual.</p>
                   </div>
-                  <div className="w-44">
+                  <div className="w-full sm:w-44">
                     <select
                       value={nuevaNotaProgreso}
                       onChange={(e) => setNuevaNotaProgreso(e.target.value)}
@@ -443,16 +443,16 @@ export default function Historial({ session, professionalId, initialPatientId, o
                   onChange={(e) => setNuevaNota(e.target.value)}
                   rows="3"
                   placeholder="Ej: Se realiza asepsia, antisepsia y deslaminación de hiperqueratosis plantar..."
-                  className="w-full rounded-xl border border-slate-300 bg-slate-50 p-3 text-xs font-semibold text-slate-800 outline-none transition focus:border-sky-600 focus:bg-white"
+                  className="w-full rounded-xl border border-slate-300 bg-slate-50 p-2.5 sm:p-3 text-xs font-semibold text-slate-800 outline-none transition focus:border-sky-600 focus:bg-white"
                 />
 
                 <div>
                   <p className="mb-2 text-xs font-bold text-slate-700">Tratamientos aplicados en esta sesión</p>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-wrap gap-1.5 sm:gap-2">
                     {TREATMENT_GROUPS.flatMap((g) => g.items).map((item) => (
                       <label
                         key={item.key}
-                        className={`cursor-pointer rounded-xl border px-3 py-1.5 text-xs font-semibold transition-all ${
+                        className={`cursor-pointer rounded-xl border px-2.5 py-1 text-xs font-semibold transition-all ${
                           nuevaNotaTratamientos.includes(item.key)
                             ? 'border-emerald-300 bg-emerald-100 text-emerald-900 shadow-2xs'
                             : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100'
@@ -470,34 +470,33 @@ export default function Historial({ session, professionalId, initialPatientId, o
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between gap-3 pt-2">
-                  {mensaje && <p className="text-xs text-red-600 font-semibold">{mensaje}</p>}
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
+                  {mensaje && <p className="text-xs text-red-600 font-semibold w-full sm:w-auto text-center sm:text-left">{mensaje}</p>}
                   <button
                     type="submit"
                     disabled={guardando || !nuevaNota.trim()}
-                    className="ml-auto rounded-xl bg-sky-600 px-5 py-2.5 text-xs font-bold text-white shadow-sm transition hover:bg-sky-700 disabled:opacity-50 cursor-pointer"
+                    className="w-full sm:w-auto sm:ml-auto rounded-xl bg-sky-600 px-5 py-2.5 text-xs font-bold text-white shadow-sm transition hover:bg-sky-700 disabled:opacity-50 cursor-pointer"
                   >
-                    {guardando ? 'Guardando...' : '+ Guardar Entrada de Sesión'}
+                    {guardando ? 'Guardando...' : '+ Guardar Entrada'}
                   </button>
                 </div>
               </form>
 
-              {/* Línea de tiempo del Registro Cronológico */}
-              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs space-y-4">
-                <h5 className="text-sm font-extrabold text-slate-800">Historial cronológico de atenciones</h5>
+              {/* Historial Cronológico */}
+              <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 shadow-xs space-y-4">
+                <h5 className="text-xs sm:text-sm font-extrabold text-slate-800">Historial cronológico de atenciones</h5>
                 {loadingNotes ? (
                   <div className="space-y-2">
-                    <div className="skeleton h-16 w-full rounded-xl" />
                     <div className="skeleton h-16 w-full rounded-xl" />
                   </div>
                 ) : notes.length === 0 ? (
                   <div className="rounded-xl border border-dashed border-slate-300 p-6 text-center">
-                    <p className="text-xs font-medium text-slate-500">Todavía no hay entradas registradas para este paciente.</p>
+                    <p className="text-xs font-medium text-slate-500">No hay entradas registradas aún.</p>
                   </div>
                 ) : (
                   <ul className="space-y-3">
                     {notes.map((n) => (
-                      <li key={n.id} className="animate-fade-in rounded-xl border border-slate-200/80 bg-slate-50/70 p-4 space-y-2.5">
+                      <li key={n.id} className="animate-fade-in rounded-xl border border-slate-200/80 bg-slate-50/70 p-3.5 space-y-2">
                         <div className="flex items-center justify-between flex-wrap gap-2">
                           <div className="flex items-center gap-2">
                             <span className="text-xs font-extrabold text-sky-900">
@@ -518,9 +517,9 @@ export default function Historial({ session, professionalId, initialPatientId, o
                         </div>
                         <p className="whitespace-pre-wrap text-xs text-slate-800 leading-relaxed">{n.notes}</p>
                         {Array.isArray(n.treatments_applied) && n.treatments_applied.length > 0 && (
-                          <div className="flex flex-wrap gap-1.5 pt-1">
+                          <div className="flex flex-wrap gap-1 pt-1">
                             {n.treatments_applied.map((key) => (
-                              <span key={key} className="rounded-lg bg-emerald-100 border border-emerald-200 px-2.5 py-0.5 text-[11px] font-bold text-emerald-800">
+                              <span key={key} className="rounded-lg bg-emerald-100 border border-emerald-200 px-2 py-0.5 text-[10px] font-bold text-emerald-800">
                                 {treatmentLabel(key)}
                               </span>
                             ))}

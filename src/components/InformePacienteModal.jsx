@@ -125,11 +125,11 @@ export default function InformePacienteModal({ paciente, profile, onClose }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
-      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl space-y-4">
+    <div className="fixed inset-0 z-50 flex items-start justify-center p-3 pt-3 sm:pt-6 bg-black/50 backdrop-blur-xs">
+      <div className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-5 sm:p-6 shadow-2xl space-y-4">
         <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-          <h3 className="text-base font-extrabold text-slate-900">📄 Generar Informe para el Paciente</h3>
-          <button onClick={onClose} className="text-xs font-bold text-slate-400 hover:text-slate-700 cursor-pointer">✕ Cerrar</button>
+          <h3 className="text-sm sm:text-base font-extrabold text-slate-900">📄 Generar Informe para el Paciente</h3>
+          <button onClick={onClose} className="text-xs font-bold text-slate-400 hover:text-slate-700 cursor-pointer p-1">✕ Cerrar</button>
         </div>
 
         <div className="space-y-3.5 text-xs">
@@ -139,7 +139,7 @@ export default function InformePacienteModal({ paciente, profile, onClose }) {
               type="text"
               value={tituloInforme}
               onChange={(e) => setTituloInforme(e.target.value)}
-              className="w-full rounded-xl border border-slate-300 bg-slate-50 p-2.5 font-semibold text-slate-800 outline-none focus:border-sky-600"
+              className="w-full rounded-xl border border-slate-300 bg-slate-50 p-2.5 font-semibold text-slate-800 outline-none focus:border-sky-600 focus:bg-white"
             />
           </div>
 
@@ -149,7 +149,7 @@ export default function InformePacienteModal({ paciente, profile, onClose }) {
               value={mensajePaciente}
               onChange={(e) => setMensajePaciente(e.target.value)}
               rows="3"
-              className="w-full rounded-xl border border-slate-300 bg-slate-50 p-3 font-semibold text-slate-800 outline-none focus:border-sky-600"
+              className="w-full rounded-xl border border-slate-300 bg-slate-50 p-3 font-semibold text-slate-800 outline-none focus:border-sky-600 focus:bg-white"
             />
           </div>
 
@@ -159,7 +159,7 @@ export default function InformePacienteModal({ paciente, profile, onClose }) {
               value={indicacionesCasa}
               onChange={(e) => setIndicacionesCasa(e.target.value)}
               rows="3"
-              className="w-full rounded-xl border border-slate-300 bg-slate-50 p-3 font-semibold text-slate-800 outline-none focus:border-sky-600"
+              className="w-full rounded-xl border border-slate-300 bg-slate-50 p-3 font-semibold text-slate-800 outline-none focus:border-sky-600 focus:bg-white"
             />
           </div>
 
@@ -170,18 +170,18 @@ export default function InformePacienteModal({ paciente, profile, onClose }) {
               value={proximaCitaSugerida}
               onChange={(e) => setProximaCitaSugerida(e.target.value)}
               placeholder="Ej. En 4 semanas, Control en 1 mes..."
-              className="w-full rounded-xl border border-slate-300 bg-slate-50 p-2.5 font-semibold text-slate-800 outline-none focus:border-sky-600"
+              className="w-full rounded-xl border border-slate-300 bg-slate-50 p-2.5 font-semibold text-slate-800 outline-none focus:border-sky-600 focus:bg-white"
             />
           </div>
         </div>
 
-        <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+        <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100 flex-wrap">
           <button onClick={onClose} className="rounded-xl bg-slate-200 px-4 py-2.5 text-xs font-bold text-slate-700 cursor-pointer hover:bg-slate-300 transition">Cancelar</button>
           <button
             onClick={handleGenerarPDF}
             className="rounded-xl bg-sky-600 px-5 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-sky-700 transition cursor-pointer"
           >
-            🖨️ Imprimir / Guardar Informe PDF
+            🖨️ Imprimir / Guardar PDF
           </button>
         </div>
       </div>
