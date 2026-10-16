@@ -55,11 +55,11 @@ export default function CitaDetalleModal({ appointment, onClose, onEdit, onCance
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
-      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl animate-fade-in-up">
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 p-3 pt-3 sm:pt-6 backdrop-blur-xs">
+      <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-5 sm:p-6 shadow-2xl animate-fade-in-up">
         <div className="flex items-center justify-between border-b border-slate-100 pb-3">
           <div>
-            <h3 className="text-lg font-bold text-slate-800">Detalle de la Cita</h3>
+            <h3 className="text-base sm:text-lg font-bold text-slate-800">Detalle de la Cita</h3>
             <p className="text-xs text-slate-400">Información completa de la reserva</p>
           </div>
           <button
@@ -163,7 +163,7 @@ export default function CitaDetalleModal({ appointment, onClose, onEdit, onCance
           </div>
         </div>
 
-        <div className="mt-5 flex items-center justify-end gap-2 border-t border-slate-100 pt-3">
+        <div className="mt-5 flex items-center justify-end gap-2 border-t border-slate-100 pt-3 flex-wrap">
           <button
             onClick={() => onCancelAppointment(appointment)}
             className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold text-red-600 transition hover:bg-red-100 cursor-pointer"
